@@ -6,7 +6,6 @@ The language model runs locally on my own GPU, and the document chunks are store
 
 > **Status:** early stage. Only the repository skeleton exists so far (Phase 0).
 
-For the full project brief (goals, architecture, phased plan and best practices), see [`TFM_CHATBOT.md`](TFM_CHATBOT.md).
 
 ## How it will work
 
@@ -53,3 +52,8 @@ Setup instructions will be added as the project grows. The planned order of work
 ## Tech stack (planned)
 
 Python, FastAPI, PostgreSQL + pgvector, a local LLM served through Ollama (vLLM later, maybe), Docker, GitHub Actions, Railway.
+
+
+## Development workflow
+
+All changes go through short-lived branches and pull requests into `main`.
