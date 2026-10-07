@@ -1,0 +1,32 @@
+# Secrets: never commit these
+.env
+.env.*
+!.env.example
+
+# Your documents: unpublished thesis + copyrighted papers
+data/
+
+# Project md file
+TFM_CHATBOT.md
+
+# Python noise
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/
+
+# Heavy files that don't belong in git
+models/
+*.gguf
+*.safetensors
+
+# Local database storage (if mounted from Docker later)
+pgdata/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
