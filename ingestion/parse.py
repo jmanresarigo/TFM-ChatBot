@@ -62,6 +62,19 @@ LIST_HEADING = re.compile(
 ROMAN_PAGE_NUMBER = re.compile(r"^[ivxlc]+$", re.IGNORECASE)
 
 
+# Some PDFs store page labels still encoded as hex UTF-16, e.g. "<FEFF0038>"
+# for "8". PyMuPDF passes these through as-is, so they are decoded here.
+ENCODED_LABEL = re.compile(r"<FEFF((?:[0-9A-Fa-f]{4})+)>")
+
+
+def clean_label(label: str, number: int) -> str:
+    """Printed page label, decoded if needed; the page position as fallback."""
+    match = ENCODED_LABEL.fullmatch(label)
+    if match:
+        label = bytes.fromhex(match.group(1)).decode("utf-16-be")
+    return label.strip() or str(number)
+
+
 # --- 1. Extract --------------------------------------------------------------
 
 
@@ -83,7 +96,7 @@ def extract_pages(pdf_path: Path) -> list[dict]:
             pages.append(
                 {
                     "page": number,
-                    "label": page.get_label() or str(number),
+                    "label": clean_label(page.get_label(), number),
                     "blocks": blocks,
                 }
             )
