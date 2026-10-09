@@ -52,6 +52,9 @@ LIGATURES = {
 # Spacing accents that some PDFs place *before* the letter: "´n" means "ń".
 SPACING_ACCENTS = {"´": "́", "¨": "̈", "˜": "̃", "ˆ": "̂", "ˇ": "̌"}
 BROKEN_ACCENT = re.compile("([" + "".join(SPACING_ACCENTS) + r"])\s?([A-Za-z])")
+# Invisible control characters some PDFs contain, e.g. NUL (0x00), which
+# Postgres refuses to store in text columns. Tabs and newlines are kept.
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 DOT_LEADERS = re.compile(r"(\. ){3,}|\.{4,}")
 LIST_HEADING = re.compile(
     r"^(contents|table of contents|list of (figures|tables))$", re.IGNORECASE
@@ -91,6 +94,7 @@ def extract_pages(pdf_path: Path) -> list[dict]:
 
 
 def fix_characters(line: str) -> str:
+    line = CONTROL_CHARS.sub("", line)
     for ligature, letters in LIGATURES.items():
         line = line.replace(ligature, letters)
     # "´n" -> "n" + combining accent, then NFC merges them into "ń"
