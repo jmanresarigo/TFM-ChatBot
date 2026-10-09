@@ -29,7 +29,8 @@ import pymupdf
 
 # A line is treated as a header/footer if it appears on at least this
 # fraction of pages (digits are ignored, so "Page 3" and "Page 4" match).
-REPEATED_LINE_FRACTION = 0.5
+# 0.3 also catches headers that alternate between odd and even pages.
+REPEATED_LINE_FRACTION = 0.3
 # A page is treated as a table of contents / list of figures if at least this
 # fraction of its lines contain dot leaders (". . . .").
 TOC_LINE_FRACTION = 0.3
@@ -101,8 +102,11 @@ def fix_characters(line: str) -> str:
 
 
 def line_key(line: str) -> str:
-    """Normalize a line for header/footer detection (digits don't matter)."""
-    return re.sub(r"\d+", "#", line.strip().lower())
+    """Normalize a line for header/footer detection (digits don't matter).
+
+    Characters are fixed first, so the key is the same before and after
+    cleaning ("Morzy´nski" and "Morzyński" give the same key)."""
+    return re.sub(r"\d+", "#", fix_characters(line).strip().lower())
 
 
 def find_repeated_lines(pages: list[dict]) -> set[str]:
@@ -114,7 +118,14 @@ def find_repeated_lines(pages: list[dict]) -> set[str]:
         keys = {line_key(line) for block in page["blocks"] for line in block}
         counts.update(k for k in keys if k)
     min_pages = max(3, REPEATED_LINE_FRACTION * len(pages))
-    return {key for key, count in counts.items() if count >= min_pages}
+    # Only lines with letters: number-only lines such as equation numbers
+    # "(2.5)" repeat across pages too, but they are content. Page numbers
+    # are removed later by the block filter instead.
+    return {
+        key
+        for key, count in counts.items()
+        if count >= min_pages and any(ch.isalpha() for ch in key)
+    }
 
 
 def is_toc_page(page: dict) -> bool:
