@@ -3,7 +3,10 @@ name = "tfm-chatbot"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.6",
     "pymupdf>=1.28.2",
+    "python-dotenv>=1.2.4",
     "sentence-transformers>=6.1.0",
     "torch>=2.14.1",
 ]
