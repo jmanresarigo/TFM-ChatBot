@@ -57,3 +57,25 @@ Python, FastAPI, PostgreSQL + pgvector, a local LLM served through Ollama (vLLM 
 ## Development workflow
 
 All changes go through short-lived branches and pull requests into `main`.
+
+
+## Run with Docker
+
+The web app and the database run in containers; the LLM runs in Ollama on the host (GPU).
+
+**Requirements:** Docker Desktop, Ollama with the model from `LLM_MODEL` pulled, and a filled `.env` (copy `.env.example`). The database must already contain the chunks (see Ingestion).
+
+```bash
+docker compose up -d --build     # build the app image, start app + database
+docker compose ps                # both should be Up; app becomes (healthy) after ~1 min
+```
+
+Open http://127.0.0.1:8080. Health check: http://127.0.0.1:8080/health.
+
+| Command | What it does |
+|---|---|
+| `docker compose logs -f app` | follow the app's logs |
+| `docker compose down` | stop and remove the containers (the data in the `pgdata` volume is kept) |
+| `docker compose up -d db` | only the database, for local development with `uvicorn --reload` |
+
+The image contains the code, libraries and embedding model only: no documents, no database contents and no secrets (see `.dockerignore`). Settings are passed in at run time through environment variables.
