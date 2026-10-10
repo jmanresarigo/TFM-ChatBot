@@ -1,5 +1,7 @@
 # TFM Chatbot
 
+[![CI](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml)
+
 A personal assistant for my Master's thesis on Spiking Neural Networks. It answers questions about my thesis and the papers I cited, using Retrieval-Augmented Generation (RAG) so that answers are grounded in the actual documents and come with source and page citations.
 
 The language model runs locally on my own GPU, and the document chunks are stored in PostgreSQL with pgvector. The main goal of the project is to learn how AI applications are built and deployed in practice: packaging, CI/CD, rollout and observability.
@@ -79,3 +81,14 @@ Open http://127.0.0.1:8080. Health check: http://127.0.0.1:8080/health.
 | `docker compose up -d db` | only the database, for local development with `uvicorn --reload` |
 
 The image contains the code, libraries and embedding model only: no documents, no database contents and no secrets (see `.dockerignore`). Settings are passed in at run time through environment variables.
+
+## Checks
+
+Every pull request runs [CI](.github/workflows/ci.yml): ruff (lint), pytest (unit tests) and a Docker build that starts the server. To run the same checks locally:
+
+```bash
+uv run ruff check .
+uv run pytest
+```
+
+Retrieval and answer evaluations need the documents and the local LLM, so they are run by hand (see `evals/`).
