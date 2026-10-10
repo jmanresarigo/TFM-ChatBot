@@ -53,7 +53,9 @@ def check_sources(questions: list[dict]) -> None:
     """Warn about expected documents that are not in the database: those
     questions could never be hits, which would silently lower the score."""
     with retrieval.connect() as conn:
-        stored = {normalize(r[0]) for r in conn.execute("SELECT DISTINCT source FROM chunks")}
+        stored = {
+            normalize(r[0]) for r in conn.execute("SELECT DISTINCT source FROM chunks")
+        }
     expected = {src for q in questions for src, _ in accepted_answers(q)}
     missing = sorted(name for name in expected if normalize(name) not in stored)
     for name in missing:
@@ -72,7 +74,9 @@ def first_hit_rank(question: dict, results: list[dict]) -> int | None:
     accepted = [(normalize(src), pages) for src, pages in accepted_answers(question)]
     for rank, chunk in enumerate(results, start=1):
         source, pages = normalize(chunk["source"]), set(chunk["pages"])
-        if any(source == src and pages & accepted_pages for src, accepted_pages in accepted):
+        if any(
+            source == src and pages & accepted_pages for src, accepted_pages in accepted
+        ):
             return rank
     return None
 
@@ -83,12 +87,14 @@ def evaluate(questions: list[dict], mode: str) -> dict:
         results = retrieval.search(q["question"], top_k=K, mode=mode)
         rank = first_hit_rank(q, results)
         top = results[0] if results else None
-        per_question.append({
-            "id": q["id"],
-            "type": q["type"],
-            "rank": rank,
-            "top1": f"{top['source']} p.{','.join(top['pages'])}" if top else "-",
-        })
+        per_question.append(
+            {
+                "id": q["id"],
+                "type": q["type"],
+                "rank": rank,
+                "top1": f"{top['source']} p.{','.join(top['pages'])}" if top else "-",
+            }
+        )
 
     def summarize(rows: list[dict]) -> dict:
         n = len(rows)
@@ -114,8 +120,10 @@ def evaluate(questions: list[dict], mode: str) -> dict:
 
 def print_report(report: dict, questions: dict[str, dict], verbose: bool) -> None:
     def line(label: str, s: dict) -> str:
-        return (f"  {label:<12} n={s['n']:<3} hit@1 {s['hit@1']:5.0%}   hit@3 {s['hit@3']:5.0%}"
-                f"   hit@5 {s['hit@5']:5.0%}   MRR {s['mrr']:.2f}")
+        return (
+            f"  {label:<12} n={s['n']:<3} hit@1 {s['hit@1']:5.0%}   hit@3 {s['hit@3']:5.0%}"
+            f"   hit@5 {s['hit@5']:5.0%}   MRR {s['mrr']:.2f}"
+        )
 
     print(f"\n=== mode: {report['mode']} ===")
     print(line("overall", report["overall"]))
@@ -128,7 +136,9 @@ def print_report(report: dict, questions: dict[str, dict], verbose: bool) -> Non
         for r in misses:
             q = questions[r["id"]]
             print(f"  {r['id']} {q['question'][:60]:<60}")
-            expected = " or ".join(f"{src} p.{','.join(sorted(pg))}" for src, pg in accepted_answers(q))
+            expected = " or ".join(
+                f"{src} p.{','.join(sorted(pg))}" for src, pg in accepted_answers(q)
+            )
             print(f"       expected {expected}")
             print(f"       got      {r['top1']}")
     if verbose:
@@ -138,17 +148,27 @@ def print_report(report: dict, questions: dict[str, dict], verbose: bool) -> Non
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Score retrieval against evals/questions.jsonl")
-    parser.add_argument("--mode", choices=["hybrid", "vector", "keyword", "all"], default="hybrid")
-    parser.add_argument("--save", action="store_true", help="write results to evals/results/")
-    parser.add_argument("--verbose", action="store_true", help="list every question's rank")
+    parser = argparse.ArgumentParser(
+        description="Score retrieval against evals/questions.jsonl"
+    )
+    parser.add_argument(
+        "--mode", choices=["hybrid", "vector", "keyword", "all"], default="hybrid"
+    )
+    parser.add_argument(
+        "--save", action="store_true", help="write results to evals/results/"
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", help="list every question's rank"
+    )
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     all_questions = load_questions()
     questions = [q for q in all_questions if q["type"] != "unanswerable"]
     skipped = len(all_questions) - len(questions)
-    print(f"{len(questions)} answerable questions ({skipped} unanswerable skipped), top {K}")
+    print(
+        f"{len(questions)} answerable questions ({skipped} unanswerable skipped), top {K}"
+    )
     check_sources(questions)
 
     by_id = {q["id"]: q for q in questions}
@@ -167,4 +187,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except retrieval.RetrievalError as e:
+        raise SystemExit(str(e)) from None

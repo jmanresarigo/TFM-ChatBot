@@ -41,6 +41,11 @@ OPTIONS = {
 }
 
 
+class LLMError(Exception):
+    """Ollama unreachable, model missing, or an error from the model server.
+    Raised instead of SystemExit so the web server keeps running."""
+
+
 def load_system_prompt() -> str:
     return SYSTEM_PROMPT_FILE.read_text(encoding="utf-8").strip()
 
@@ -78,23 +83,23 @@ def stream_chat(messages: list[dict], stats: dict) -> Iterator[str]:
                 response.read()
                 detail = response.text
                 if response.status_code == 404:
-                    raise SystemExit(
+                    raise LLMError(
                         f"Model '{LLM_MODEL}' not found. Run: ollama pull {LLM_MODEL}"
                     )
-                raise SystemExit(f"Ollama returned {response.status_code}: {detail}")
+                raise LLMError(f"Ollama returned {response.status_code}: {detail}")
             for line in response.iter_lines():
                 if not line:
                     continue
                 data = json.loads(line)
                 if data.get("error"):
-                    raise SystemExit(f"Ollama error: {data['error']}")
+                    raise LLMError(f"Ollama error: {data['error']}")
                 piece = data.get("message", {}).get("content", "")
                 if piece:
                     yield piece
                 if data.get("done"):
                     stats.update(read_stats(data))
     except httpx.ConnectError:
-        raise SystemExit(
+        raise LLMError(
             f"Cannot reach Ollama at {LLM_BASE_URL}. Is it running? "
             f"Check with: curl.exe {LLM_BASE_URL}"
         ) from None
@@ -176,6 +181,13 @@ def ask(question: str, on_token=None) -> dict:
 
 
 def main() -> None:
+    try:
+        cli()
+    except (LLMError, retrieval.RetrievalError) as e:
+        raise SystemExit(str(e)) from None
+
+
+def cli() -> None:
     parser = argparse.ArgumentParser(
         description="Ask a question about the thesis corpus."
     )
@@ -214,7 +226,7 @@ def main() -> None:
         f"{s.get('output_seconds', 0):5.2f} s  ({speed(s.get('output_tokens', 0), s.get('output_seconds', 0)):,.0f} tokens/s)"
     )
     print(
-        f"  first token      {t.get('first_token', 0):6.2f} s"
+        f"  first token      {t.get('first_token', 0):6.2f} s  (what the user waits before text appears)"
     )
     print(f"  total            {t['retrieval'] + t['generation']:6.2f} s")
 

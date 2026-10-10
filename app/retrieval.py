@@ -45,6 +45,14 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
 CANDIDATES = 20  # how many results each search contributes before fusion
 RRF_K = 60  # standard RRF constant: dampens the gap between rank 1 and 2
 
+
+class RetrievalError(Exception):
+    """A problem the user can fix (missing config, empty database, ...).
+
+    Raised instead of SystemExit so a web server can turn it into an error
+    response instead of shutting down. The command line converts it below."""
+
+
 _model = None  # loaded once, on first use, then reused for every question
 
 
@@ -58,7 +66,7 @@ def get_model() -> SentenceTransformer:
 def connect() -> psycopg.Connection:
     url = os.getenv("DATABASE_URL")
     if not url:
-        raise SystemExit("DATABASE_URL is not set. Add it to your .env file.")
+        raise RetrievalError("DATABASE_URL is not set. Add it to your .env file.")
     conn = psycopg.connect(url)
     register_vector(conn)
     return conn
@@ -70,9 +78,9 @@ def check_model(conn: psycopg.Connection) -> None:
         "SELECT value FROM ingest_info WHERE key = 'embedding_model'"
     ).fetchone()
     if row is None:
-        raise SystemExit("The database is empty. Run the ingestion pipeline first.")
+        raise RetrievalError("The database is empty. Run the ingestion pipeline first.")
     if row[0] != EMBEDDING_MODEL:
-        raise SystemExit(
+        raise RetrievalError(
             f"Chunks were embedded with {row[0]} but the app uses {EMBEDDING_MODEL}."
         )
 
@@ -142,6 +150,13 @@ def search(question: str, top_k: int = 5, mode: str = "hybrid") -> list[dict]:
 
 
 def main() -> None:
+    try:
+        cli()
+    except RetrievalError as e:
+        raise SystemExit(str(e)) from None
+
+
+def cli() -> None:
     parser = argparse.ArgumentParser(description="Search the chunk database.")
     parser.add_argument("question")
     parser.add_argument(
