@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TFM Chatbot</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --border: #e3e2dd; --accent: #2f5d8a; --accent-soft: #e7eef6; --error: #a33a2c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9b9a94;
+      --border: #33332f; --accent: #8db4dc; --accent-soft: #23303d; --error: #e0806f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 140px; }
+  header h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  header p { margin: 0 0 24px; color: var(--muted); font-size: 0.9rem; }
+  .msg { margin: 0 0 20px; }
+  .question { font-weight: 600; margin-bottom: 8px; }
+  .answer {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  .answer.thinking { color: var(--muted); }
+  .cite {
+    display: inline-block; font-size: 0.75em; line-height: 1; vertical-align: super;
+    background: var(--accent-soft); color: var(--accent); border-radius: 4px;
+    padding: 2px 4px; margin: 0 1px; font-weight: 600;
+  }
+  .sources { margin: 10px 2px 0; font-size: 0.88rem; color: var(--muted); }
+  .sources ol { margin: 4px 0 0; padding-left: 20px; }
+  .sources li { margin: 2px 0; }
+  details { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
+  details summary { cursor: pointer; }
+  .excerpt { border-left: 3px solid var(--border); padding: 4px 10px; margin: 8px 0; white-space: pre-wrap; }
+  .meta { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  .error { color: var(--error); }
+  form {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--bg);
+    border-top: 1px solid var(--border); padding: 12px 16px;
+  }
+  .inner { max-width: 820px; margin: 0 auto; display: flex; gap: 8px; }
+  textarea {
+    flex: 1; resize: none; height: 64px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit;
+  }
+  button {
+    padding: 0 18px; border: 0; border-radius: 10px; background: var(--accent);
+    color: var(--panel); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>TFM Chatbot</h1>
+    <p>Ask about the thesis and the papers it cites. Answers come only from the documents, with sources.</p>
+  </header>
+  <div id="log"></div>
+</main>
+
+<form id="form">
+  <div class="inner">
+    <textarea id="question" placeholder="Ask a question… (Enter to send, Shift+Enter for a new line)" required></textarea>
+    <button id="send" type="submit">Ask</button>
+  </div>
+</form>
+
+<script>
+const log = document.getElementById("log");
+const form = document.getElementById("form");
+const input = document.getElementById("question");
+const sendButton = document.getElementById("send");
+
+// Escape text before inserting it as HTML, so document or model text can
+// never inject markup or scripts into the page.
+function escapeHtml(text) {
+  return text.replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+}
+
+// Show [1], [2] as small citation badges.
+function renderAnswer(text) {
+  return escapeHtml(text).replace(/\[(\d+)\]/g, '<span class="cite">$1</span>');
+}
+
+function el(tag, className, html) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (html !== undefined) node.innerHTML = html;
+  return node;
+}
+
+async function ask(question) {
+  const msg = el("div", "msg");
+  msg.append(el("div", "question", escapeHtml(question)));
+  const answerBox = el("div", "answer thinking", "Searching the documents…");
+  msg.append(answerBox);
+  log.append(msg);
+  msg.scrollIntoView({behavior: "smooth"});
+
+  let answer = "";
+  let excerpts = [];
+
+  // Called for each Server-Sent Event the server sends.
+  function handle(event, data) {
+    if (event === "excerpts") {
+      excerpts = data;
+      answerBox.textContent = "Writing the answer…";
+    } else if (event === "token") {
+      answer += data.text;
+      answerBox.classList.remove("thinking");
+      answerBox.innerHTML = renderAnswer(answer);
+    } else if (event === "done") {
+      const byNumber = Object.fromEntries(excerpts.map(e => [e.n, e]));
+      if (data.cited.length) {
+        const items = data.cited.map(n => {
+          const e = byNumber[n];
+          return `<li value="${n}">${escapeHtml(e.source)}, p. ${escapeHtml(e.pages.join(", "))}</li>`;
+        }).join("");
+        msg.append(el("div", "sources", `Sources<ol>${items}</ol>`));
+      }
+      if (data.invalid_citations.length) {
+        msg.append(el("div", "meta error", `Warning: cites excerpts that do not exist: ${data.invalid_citations.join(", ")}`));
+      }
+      const all = excerpts.map(e =>
+        `<div class="excerpt"><b>[${e.n}] ${escapeHtml(e.source)}, p. ${escapeHtml(e.pages.join(", "))}</b>\n${escapeHtml(e.preview.replace(/\s*\n\s*/g, " "))}…</div>`
+      ).join("");
+      msg.append(el("details", "", `<summary>All ${excerpts.length} retrieved excerpts</summary>${all}`));
+      msg.append(el("div", "meta",
+        `${data.seconds} s total · first word after ${data.first_token_seconds} s · ${data.output_tokens} output tokens`));
+    } else if (event === "error") {
+      answerBox.classList.remove("thinking");
+      answerBox.innerHTML = `<span class="error">${escapeHtml(data.message)}</span>`;
+    }
+  }
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({question}),
+    });
+    if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+    // Read the stream as it arrives. Events are separated by a blank line;
+    // each has an "event:" line and a "data:" line with JSON.
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      let end;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const raw = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let event = "message", data = "";
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) data += line.slice(6);
+        }
+        handle(event, JSON.parse(data));
+      }
+    }
+  } catch (err) {
+    answerBox.classList.remove("thinking");
+    answerBox.innerHTML = `<span class="error">Could not reach the server: ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  sendButton.disabled = true;
+  try { await ask(question); } finally { sendButton.disabled = false; input.focus(); }
+});
+
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    form.requestSubmit();
+  }
+});
+</script>
+</body>
+</html>
