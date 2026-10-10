@@ -96,7 +96,7 @@ def vector_search(conn: psycopg.Connection, question: str, limit: int) -> list[d
         """,
         (query_vector, limit),
     ).fetchall()
-    return [dict(zip(("id", "source", "pages", "content"), r)) for r in rows]
+    return [dict(zip(("id", "source", "pages", "content"), r, strict=True)) for r in rows]
 
 
 def keyword_search(conn: psycopg.Connection, question: str, limit: int) -> list[dict]:
@@ -117,7 +117,7 @@ def keyword_search(conn: psycopg.Connection, question: str, limit: int) -> list[
         """,
         (question, limit),
     ).fetchall()
-    return [dict(zip(("id", "source", "pages", "content"), r)) for r in rows]
+    return [dict(zip(("id", "source", "pages", "content"), r, strict=True)) for r in rows]
 
 
 def hybrid_search(

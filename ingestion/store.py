@@ -126,7 +126,7 @@ def store_all(reset: bool) -> None:
                         """,
                         [
                             (c["id"], c["source"], c["pages"], c["words"], c["text"], v)
-                            for c, v in zip(chunks, vectors)
+                            for c, v in zip(chunks, vectors, strict=True)
                         ],
                     )
             print(f"{source}: {len(chunks)} chunks loaded")

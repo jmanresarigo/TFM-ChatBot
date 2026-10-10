@@ -139,7 +139,7 @@ def ask(question: str, top_k: int) -> None:
             )
             return
         scores = vectors @ query_vector  # one dot product per chunk
-        results.extend(zip(scores.tolist(), chunks))
+        results.extend(zip(scores.tolist(), chunks, strict=True))
 
     results.sort(key=lambda r: r[0], reverse=True)
     print(f'\nQuestion: "{question}"')
