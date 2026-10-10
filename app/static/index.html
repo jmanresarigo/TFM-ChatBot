@@ -8,11 +8,13 @@
   :root {
     --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
     --border: #e3e2dd; --accent: #2f5d8a; --accent-soft: #e7eef6; --error: #a33a2c;
+    --warn: #b7791f;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9b9a94;
       --border: #33332f; --accent: #8db4dc; --accent-soft: #23303d; --error: #e0806f;
+      --warn: #e0b060;
     }
   }
   * { box-sizing: border-box; }
@@ -20,9 +22,27 @@
     margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 140px; }
-  header h1 { font-size: 1.25rem; margin: 0 0 4px; }
-  header p { margin: 0 0 24px; color: var(--muted); font-size: 0.9rem; }
+  main { max-width: 820px; margin: 0 auto; padding: 0 16px 140px; }
+  header {
+    position: sticky; top: 0; z-index: 1; background: var(--bg);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 8px 16px; padding: 12px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 1.25rem; margin: 0; }
+  .tools { display: flex; align-items: center; gap: 12px; }
+  .meter { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); }
+  .bar { width: 110px; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .fill { height: 100%; width: 0; background: var(--accent); transition: width 0.3s; }
+  .meter.warn .fill { background: var(--warn); }
+  .meter.full .fill { background: var(--error); }
+  .meter.full { color: var(--error); }
+  .intro { margin: 0 0 24px; color: var(--muted); font-size: 0.9rem; }
+  .reset {
+    padding: 6px 12px; background: transparent; color: var(--text);
+    border: 1px solid var(--border); font-size: 0.85rem; font-weight: 500; white-space: nowrap;
+  }
+  .reset:hover { border-color: var(--muted); }
+  .searched { font-size: 0.8rem; color: var(--muted); margin: -4px 0 8px; }
   .msg { margin: 0 0 20px; }
   .question { font-weight: 600; margin-bottom: 8px; }
   .answer {
@@ -63,8 +83,15 @@
 <main>
   <header>
     <h1>TFM Chatbot</h1>
-    <p>Ask about the thesis and the papers it cites. Answers come only from the documents, with sources.</p>
+    <div class="tools">
+      <div class="meter" id="meter" title="How much of the model's context window the conversation uses. When it is full, the oldest messages are left out.">
+        <div class="bar"><div class="fill" id="meter-fill"></div></div>
+        <span id="meter-label">Context: empty</span>
+      </div>
+      <button class="reset" id="reset" type="button">New conversation</button>
+    </div>
   </header>
+  <p class="intro">Ask about the thesis and the papers it cites. Answers come only from the documents, with sources. Follow-up questions can refer to earlier messages.</p>
   <div id="log"></div>
 </main>
 
@@ -80,6 +107,38 @@ const log = document.getElementById("log");
 const form = document.getElementById("form");
 const input = document.getElementById("question");
 const sendButton = document.getElementById("send");
+const resetButton = document.getElementById("reset");
+const meter = document.getElementById("meter");
+const meterFill = document.getElementById("meter-fill");
+const meterLabel = document.getElementById("meter-label");
+
+// The conversation so far, as the model sees it: [{role, content}, ...].
+// It lives only here in the page; every request sends it to the server.
+let history = [];
+let controller = null;  // lets "New conversation" cancel an answer in progress
+
+function updateMeter(context) {
+  meter.classList.remove("warn", "full");
+  if (!context) {
+    meterFill.style.width = "0";
+    meterLabel.textContent = "Context: empty";
+    return;
+  }
+  const percent = Math.min(context.percent, 100);
+  meterFill.style.width = `${percent}%`;
+  meterLabel.textContent =
+    `Context: ${context.used.toLocaleString()} / ${context.limit.toLocaleString()} tokens (${Math.round(context.percent)}%)`;
+  if (percent >= 95) meter.classList.add("full");
+  else if (percent >= 80) meter.classList.add("warn");
+}
+
+function resetConversation() {
+  if (controller) controller.abort();
+  history = [];
+  log.innerHTML = "";
+  updateMeter(null);
+  input.focus();
+}
 
 // Escape text before inserting it as HTML, so document or model text can
 // never inject markup or scripts into the page.
@@ -112,7 +171,13 @@ async function ask(question) {
 
   // Called for each Server-Sent Event the server sends.
   function handle(event, data) {
-    if (event === "excerpts") {
+    if (event === "route") {
+      const note = data.search
+        ? (data.query !== question ? `Searched for: ${escapeHtml(data.query)}` : "")
+        : "No document search: this question is about the conversation";
+      if (note) msg.insertBefore(el("div", "searched", note), answerBox);
+      if (!data.search) answerBox.textContent = "Writing the answer…";
+    } else if (event === "excerpts") {
       excerpts = data;
       answerBox.textContent = "Writing the answer…";
     } else if (event === "token") {
@@ -120,6 +185,8 @@ async function ask(question) {
       answerBox.classList.remove("thinking");
       answerBox.innerHTML = renderAnswer(answer);
     } else if (event === "done") {
+      history.push({role: "user", content: question}, {role: "assistant", content: answer});
+      updateMeter(data.context);
       const byNumber = Object.fromEntries(excerpts.map(e => [e.n, e]));
       if (data.cited.length) {
         const items = data.cited.map(n => {
@@ -134,7 +201,12 @@ async function ask(question) {
       const all = excerpts.map(e =>
         `<div class="excerpt"><b>[${e.n}] ${escapeHtml(e.source)}, p. ${escapeHtml(e.pages.join(", "))}</b>\n${escapeHtml(e.preview.replace(/\s*\n\s*/g, " "))}…</div>`
       ).join("");
-      msg.append(el("details", "", `<summary>All ${excerpts.length} retrieved excerpts</summary>${all}`));
+      if (excerpts.length) {
+        msg.append(el("details", "", `<summary>All ${excerpts.length} retrieved excerpts</summary>${all}`));
+      }
+      if (data.history_dropped) {
+        msg.append(el("div", "meta", `The ${data.history_dropped} oldest messages no longer fit in the context window and were left out.`));
+      }
       msg.append(el("div", "meta",
         `${data.seconds} s total · first word after ${data.first_token_seconds} s · ${data.output_tokens} output tokens`));
     } else if (event === "error") {
@@ -143,11 +215,13 @@ async function ask(question) {
     }
   }
 
+  controller = new AbortController();
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({question}),
+      body: JSON.stringify({question, history}),
+      signal: controller.signal,
     });
     if (!response.ok) throw new Error(`Server returned ${response.status}`);
 
@@ -173,15 +247,20 @@ async function ask(question) {
       }
     }
   } catch (err) {
+    if (err.name === "AbortError") return;  // cancelled by "New conversation"
     answerBox.classList.remove("thinking");
     answerBox.innerHTML = `<span class="error">Could not reach the server: ${escapeHtml(err.message)}</span>`;
+  } finally {
+    controller = null;
   }
 }
+
+resetButton.addEventListener("click", resetConversation);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const question = input.value.trim();
-  if (!question) return;
+  if (!question || controller) return;  // one question at a time
   input.value = "";
   sendButton.disabled = true;
   try { await ask(question); } finally { sendButton.disabled = false; input.focus(); }
