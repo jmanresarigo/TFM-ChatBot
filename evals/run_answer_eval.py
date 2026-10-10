@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "app"))  # so "import llm" finds app/llm.py
 
 import httpx  # noqa: E402
+
 import llm  # noqa: E402
 import retrieval  # noqa: E402
 

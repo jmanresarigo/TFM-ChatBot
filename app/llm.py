@@ -29,6 +29,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import httpx
+
 import retrieval  # also loads .env
 
 ROOT = Path(__file__).resolve().parent.parent

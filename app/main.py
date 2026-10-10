@@ -31,12 +31,13 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-import llm
 import psycopg
-import retrieval
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
+import llm
+import retrieval
 
 STATIC_DIR = Path(__file__).parent / "static"
 log = logging.getLogger("uvicorn.error")  # shows up in the server's console
