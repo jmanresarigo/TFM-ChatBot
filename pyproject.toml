@@ -37,6 +37,7 @@ dev = [
 
 [tool.ruff]
 target-version = "py312"
+src = ["app", "ingestion", "evals"]
 
 [tool.ruff.lint]
 # E/W: style errors, F: real bugs (undefined names, unused imports),
@@ -44,3 +45,8 @@ target-version = "py312"
 select = ["E", "W", "F", "I", "B", "UP"]
 # Long lines are a formatting question, not a bug: don't fail on them.
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["app", "ingestion", "evals"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
