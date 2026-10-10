@@ -11,9 +11,15 @@ sends it with every question. Resetting the conversation is just the browser
 forgetting it. This keeps the server simple, and any number of server copies
 can answer any request (useful once it is deployed).
 
-Run from the project root:
-    uvicorn main:app --app-dir app --reload
-then open http://127.0.0.1:8000
+Two ways of running the app:
+Development (app runs on my PC's venv):
+    docker compose up -d db
+    uvicorn main:app --app-dir app --reload --port 8080
+    then open http://127.0.0.1:8000
+
+Packaged version (app runs on the container):
+    docker compose up -d --build
+    then open http://127.0.0.1:8000
 """
 
 import json

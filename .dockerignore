@@ -1,0 +1,12 @@
+# What `docker build` may see. Everything is excluded by default and only the
+# files the image needs are let back in, so a new file (a PDF, a .env copy,
+# a database dump) can never end up in the image by accident.
+*
+!pyproject.toml
+!uv.lock
+!app/
+!prompts/
+
+# ...and nothing generated inside those folders.
+**/__pycache__
+**/*.pyc
