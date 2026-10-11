@@ -5,6 +5,10 @@ Endpoints:
     POST /api/chat   {"question": "...", "history": [...]} -> the answer as a
                      stream of Server-Sent Events (SSE), see answer_stream()
     GET  /health     is the server able to work? (database, embeddings API, LLM API)
+    GET  /health/live is the server process running? (always 200 once started)
+
+With APP_PASSWORD set, every page except the two health checks asks for that
+password (the browser shows its own login box; any user name works).
 
 The server keeps no conversation state: the browser holds the history and
 sends it with every question. Resetting the conversation is just the browser
@@ -16,8 +20,12 @@ Run from the project root:
 then open http://127.0.0.1:8000
 """
 
+import base64
+import binascii
 import json
 import logging
+import os
+import secrets
 import time
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
@@ -26,7 +34,12 @@ from typing import Literal
 
 import psycopg
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    StreamingResponse,
+)
 from pydantic import BaseModel, Field
 
 import llm
@@ -34,6 +47,11 @@ import retrieval
 
 STATIC_DIR = Path(__file__).parent / "static"
 log = logging.getLogger("uvicorn.error")  # shows up in the server's console
+
+# Empty = no password (local development). Set it on any public deployment.
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+# Health checks stay open: hosting platforms and monitors call them without a password.
+PUBLIC_PATHS = {"/health", "/health/live"}
 
 
 @asynccontextmanager
@@ -51,7 +69,48 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def password_ok(authorization: str) -> bool:
+    """Check an "Authorization: Basic <base64 of user:password>" header."""
+    if not authorization.startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(authorization[6:], validate=True).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError):
+        return False
+    _, _, password = decoded.partition(":")
+    # compare_digest takes the same time whether the guess is close or not,
+    # so response times give away nothing about the password.
+    return secrets.compare_digest(password.encode(), APP_PASSWORD.encode())
+
+
+class PasswordMiddleware:
+    """Asks for APP_PASSWORD before any request reaches the app (HTTP Basic auth).
+
+    Written as plain ASGI middleware (a wrapper around the whole app) so that
+    streamed answers pass through untouched. Without a valid password the
+    reply is 401 with a WWW-Authenticate header, which makes the browser show
+    its login box; after logging in, the browser resends the password with
+    every request, including the chat page's own fetch() calls."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not APP_PASSWORD or scope["path"] in PUBLIC_PATHS:
+            return await self.app(scope, receive, send)
+        headers = dict(scope["headers"])
+        if password_ok(headers.get(b"authorization", b"").decode("latin-1")):
+            return await self.app(scope, receive, send)
+        response = PlainTextResponse(
+            "Password required.",
+            status_code=401,
+            headers={"WWW-Authenticate": 'Basic realm="TFM Chatbot", charset="UTF-8"'},
+        )
+        await response(scope, receive, send)
+
+
 app = FastAPI(title="TFM Chatbot", lifespan=lifespan)
+app.add_middleware(PasswordMiddleware)
 
 
 class Message(BaseModel):
@@ -190,6 +249,14 @@ def check_llm() -> dict:
         result = {"ok": False, "provider": llm.LLM_BASE_URL, "error": str(e)}
     _llm_check.update(at=time.monotonic(), result=result)
     return result
+
+
+@app.get("/health/live")
+def live() -> dict:
+    """Liveness: answers as soon as the server runs, without checking anything
+    else. Railway calls this before switching traffic to a new deployment, so a
+    temporarily unavailable API doesn't block a deploy."""
+    return {"status": "alive"}
 
 
 @app.get("/health")
