@@ -95,14 +95,20 @@ def test_health_reports_503_when_dependencies_are_down(monkeypatch):
     def no_llm_api(*args, **kwargs):
         raise llm.LLMError("cannot reach the API")
 
+    def no_embeddings_api(question):
+        raise retrieval.RetrievalError("cannot reach the embeddings API")
+
     monkeypatch.setattr(retrieval, "connect", no_database)
+    monkeypatch.setattr(retrieval, "embed_query", no_embeddings_api)
     monkeypatch.setattr(llm, "list_models", no_llm_api)
-    monkeypatch.setitem(main._llm_check, "at", float("-inf"))  # no cached result
+    monkeypatch.setitem(main._llm_check, "at", float("-inf"))  # no cached results
+    monkeypatch.setitem(main._embedding_check, "at", float("-inf"))
     response = client.get("/health")
     assert response.status_code == 503
     body = response.json()
     assert body["status"] == "degraded"
     assert body["database"]["ok"] is False
+    assert body["embeddings"]["ok"] is False
     assert body["llm"]["ok"] is False
 
 

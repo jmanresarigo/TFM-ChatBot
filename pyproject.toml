@@ -2,17 +2,17 @@
 name = "tfm-chatbot"
 version = "0.1.0"
 requires-python = ">=3.12"
+# What the web app needs to run, and nothing else: this is all the Docker image installs.
 dependencies = [
     "fastapi>=0.143.0",
     "httpx>=0.28.1",
+    "numpy>=2.0",
     "pgvector>=0.5.1",
     "psycopg[binary]>=3.3.6",
-    "pymupdf>=1.28.2",
     "python-dotenv>=1.2.4",
-    "sentence-transformers>=6.1.0",
-    "torch>=2.14.1",
     "uvicorn[standard]>=0.54.0",
 ]
+
 [tool.uv.sources]
 torch = [
   { index = "pytorch-cu130", marker = "sys_platform == 'win32'" },
@@ -30,10 +30,21 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [dependency-groups]
+# Checking the code: ruff and pytest (your PC and CI).
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
+# Building the database from the PDFs: parsing and embedding on your GPU (your PC only).
+ingest = [
+    "pymupdf>=1.28.2",
+    "sentence-transformers>=6.1.0",
+    "torch>=2.14.1",
+]
+
+[tool.uv]
+# "uv sync" installs both groups by default; the Dockerfile opts out with --no-default-groups.
+default-groups = ["dev", "ingest"]
 
 [tool.ruff]
 target-version = "py312"

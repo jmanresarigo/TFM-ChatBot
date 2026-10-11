@@ -1236,17 +1236,14 @@ wheels = [
 name = "tfm-chatbot"
 version = "0.1.0"
 source = { virtual = "." }
+default-groups = ["dev", "ingest"]
 dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "numpy" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
-    { name = "pymupdf" },
     { name = "python-dotenv" },
-    { name = "sentence-transformers" },
-    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
-    { name = "torch", version = "2.14.1+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'win32'" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1255,19 +1252,22 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+ingest = [
+    { name = "pymupdf" },
+    { name = "sentence-transformers" },
+    { name = "torch", version = "2.14.1", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+    { name = "torch", version = "2.14.1+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "sys_platform == 'win32'" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.143.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "pgvector", specifier = ">=0.5.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
-    { name = "pymupdf", specifier = ">=1.28.2" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
-    { name = "sentence-transformers", specifier = ">=6.1.0" },
-    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.14.1" },
-    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torch", marker = "sys_platform == 'win32'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cu130" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },
 ]
 
@@ -1275,6 +1275,13 @@ requires-dist = [
 dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.17.0" },
+]
+ingest = [
+    { name = "pymupdf", specifier = ">=1.28.2" },
+    { name = "sentence-transformers", specifier = ">=6.1.0" },
+    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32'", specifier = ">=2.14.1" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torch", marker = "sys_platform == 'win32'", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cu130" },
 ]
 
 [[package]]
