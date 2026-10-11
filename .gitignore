@@ -6,8 +6,9 @@
 # Your documents: unpublished thesis + copyrighted papers
 data/
 
-# Project md file
+# Project md files
 TFM_CHATBOT.md
+PROJECT_JOURNEY.md
 
 # Python noise
 __pycache__/
