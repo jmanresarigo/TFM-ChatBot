@@ -14,53 +14,86 @@ Fusion (RRF): a chunk gets 1 / (RRF_K + rank) points from each list it
 appears in, and chunks are sorted by their total. Ranks are used instead of
 raw scores because the two searches score on completely different scales.
 
+The question is turned into a vector by an embeddings API (OpenAI-compatible:
+Cloudflare Workers AI by default, or a local Ollama), running the SAME model
+that embedded the chunks during ingestion. The app therefore needs no PyTorch:
+it stays small enough for a free hosting tier.
+
 This module is used by the chatbot. It can also be run directly to inspect
 results:
     python app/retrieval.py "What is the membrane decay factor?"
     python app/retrieval.py "surrogate gradient" --mode keyword
 """
 
+import argparse
+import os
+import sys
 import time
 
-_start = time.perf_counter()  # to measure how long the imports below take
+import httpx
+import numpy as np
+import psycopg
+from dotenv import load_dotenv
+from pgvector.psycopg import register_vector
 
-import argparse  # noqa: E402
-import os  # noqa: E402
-import sys  # noqa: E402
-
-from dotenv import load_dotenv  # noqa: E402
-
-# Read .env BEFORE importing sentence_transformers: the Hugging Face library
-# reads settings such as HF_HUB_OFFLINE once, when it is imported.
 load_dotenv()
 
-import psycopg  # noqa: E402
-from pgvector.psycopg import register_vector  # noqa: E402
-from sentence_transformers import SentenceTransformer  # noqa: E402
-
-IMPORT_SECONDS = time.perf_counter() - _start
-
+# The model whose vectors are stored in the database (written by ingestion).
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-0.6B")
+# Where questions are embedded, and the provider's name for that same model.
+EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "").rstrip("/")
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+EMBEDDING_API_MODEL = os.getenv("EMBEDDING_API_MODEL", "@cf/qwen/qwen3-embedding-0.6b")
+# Qwen3-Embedding expects questions (not documents) to start with a task
+# instruction. This is the exact prompt sentence-transformers' encode_query()
+# adds for this model, so API vectors match the local ones.
+QUERY_INSTRUCTION = os.getenv(
+    "EMBEDDING_QUERY_INSTRUCTION",
+    "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:",
+)
 
 CANDIDATES = 20  # how many results each search contributes before fusion
 RRF_K = 60  # standard RRF constant: dampens the gap between rank 1 and 2
 
+_client = httpx.Client(timeout=httpx.Timeout(10, read=30))
+
 
 class RetrievalError(Exception):
-    """A problem the user can fix (missing config, empty database, ...).
+    """A problem the user can fix (missing config, empty database, API down...).
 
     Raised instead of SystemExit so a web server can turn it into an error
     response instead of shutting down. The command line converts it below."""
 
 
-_model = None  # loaded once, on first use, then reused for every question
+def embed_query(question: str) -> np.ndarray:
+    """The question as a unit-length vector, from the embeddings API.
 
-
-def get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(EMBEDDING_MODEL)
-    return _model
+    POST {EMBEDDING_BASE_URL}/embeddings {"model": ..., "input": [text]}
+    -> {"data": [{"embedding": [...]}]}, the OpenAI format. One retry on 429.
+    """
+    if not EMBEDDING_BASE_URL:
+        raise RetrievalError("EMBEDDING_BASE_URL is not set. Add it to your .env file.")
+    headers = {"Authorization": f"Bearer {EMBEDDING_API_KEY}"} if EMBEDDING_API_KEY else {}
+    payload = {"model": EMBEDDING_API_MODEL, "input": [QUERY_INSTRUCTION + question]}
+    url = f"{EMBEDDING_BASE_URL}/embeddings"
+    for attempt in range(2):
+        try:
+            response = _client.post(url, json=payload, headers=headers)
+        except httpx.HTTPError as e:
+            raise RetrievalError(f"Cannot reach the embeddings API at {EMBEDDING_BASE_URL}: {e}") from None
+        if response.status_code == 429 and attempt == 0:
+            time.sleep(min(float(response.headers.get("retry-after", "1") or 1), 5))
+            continue
+        break
+    if response.status_code == 401 or response.status_code == 403:
+        raise RetrievalError("The embeddings API rejected the key. Check EMBEDDING_API_KEY in .env.")
+    if response.status_code != 200:
+        raise RetrievalError(f"Embeddings API returned {response.status_code}: {response.text[:300]}")
+    vector = np.asarray(response.json()["data"][0]["embedding"], dtype=np.float32)
+    norm = np.linalg.norm(vector)
+    if norm == 0:
+        raise RetrievalError("The embeddings API returned an all-zero vector.")
+    return vector / norm
 
 
 def connect() -> psycopg.Connection:
@@ -86,7 +119,7 @@ def check_model(conn: psycopg.Connection) -> None:
 
 
 def vector_search(conn: psycopg.Connection, question: str, limit: int) -> list[dict]:
-    query_vector = get_model().encode_query(question, normalize_embeddings=True)
+    query_vector = embed_query(question)
     rows = conn.execute(
         """
         SELECT id, source, pages, content
@@ -170,21 +203,18 @@ def cli() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     # Time each stage separately, so a slow run shows where the time goes
-    timings = {"imports (PyTorch etc.)": IMPORT_SECONDS}
-    t = time.perf_counter()
+    timings = {}
     if args.mode != "keyword":
-        model = get_model()
-        timings[f"load model ({model.device})"] = time.perf_counter() - t
         t = time.perf_counter()
-        model.encode_query("warm-up", normalize_embeddings=True)
-        timings["first encode (GPU warm-up)"] = time.perf_counter() - t
+        embed_query(args.question)
+        timings["embed question (API call)"] = time.perf_counter() - t
     t = time.perf_counter()
     with connect():
         pass
     timings["connect to database"] = time.perf_counter() - t
     t = time.perf_counter()
     results = search(args.question, args.top, args.mode)
-    timings["search itself"] = time.perf_counter() - t
+    timings["search (embed + SQL)"] = time.perf_counter() - t
     print(f'\nQuestion: "{args.question}"  (mode: {args.mode})')
     if not results:
         print("No results.")

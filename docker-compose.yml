@@ -1,4 +1,5 @@
-# The whole app: database + web app. The LLM is a hosted API (Groq), set in .env.
+# The whole app: database + web app. Embeddings (Cloudflare) and the LLM (Groq)
+# are hosted APIs, configured in .env.
 #
 #   docker compose up -d --build   build the app image and start both services
 #   docker compose up -d db        only the database (for local development)
@@ -40,12 +41,12 @@ services:
       db:
         condition: service_healthy # start only once Postgres is ready
     healthcheck:
-      # Calls the app's own /health endpoint; fails on 503 (database or LLM API down).
+      # Calls the app's own /health endpoint; fails on 503 (database or an API down).
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s # time to load the embedding model before checks count
+      start_period: 15s # time to start before failed checks count
     restart: unless-stopped
 
 volumes:

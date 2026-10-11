@@ -4,7 +4,7 @@ Endpoints:
     GET  /           the chat page (app/static/index.html)
     POST /api/chat   {"question": "...", "history": [...]} -> the answer as a
                      stream of Server-Sent Events (SSE), see answer_stream()
-    GET  /health     is the server able to work? (database + LLM API)
+    GET  /health     is the server able to work? (database, embeddings API, LLM API)
 
 The server keeps no conversation state: the browser holds the history and
 sends it with every question. Resetting the conversation is just the browser
@@ -38,10 +38,12 @@ log = logging.getLogger("uvicorn.error")  # shows up in the server's console
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Runs once when the server starts: load the embedding model now, so the
-    first user doesn't wait several seconds for it."""
-    log.info("Loading embedding model %s ...", retrieval.EMBEDDING_MODEL)
-    retrieval.get_model()
+    """Runs once when the server starts: log the configuration. (Nothing heavy
+    to load: embeddings and the LLM are both called over HTTP.)"""
+    log.info(
+        "Embeddings: %s at %s (vectors of %s)",
+        retrieval.EMBEDDING_API_MODEL, retrieval.EMBEDDING_BASE_URL or "(not set)", retrieval.EMBEDDING_MODEL,
+    )
     log.info(
         "Ready. LLM: %s at %s (router: %s), token budget %d, prompt %s",
         llm.LLM_MODEL, llm.LLM_BASE_URL, llm.ROUTER_MODEL, llm.NUM_CTX, llm.SYSTEM_PROMPT_FILE.name,
@@ -155,14 +157,27 @@ def chat(request: ChatRequest) -> StreamingResponse:
     )
 
 
-# The LLM check calls the provider, so its result is reused for a minute:
-# monitoring that calls /health every few seconds won't hammer the API.
-LLM_CHECK_SECONDS = 60
+# The API checks call external providers, so their results are reused for a
+# minute: monitoring that calls /health every few seconds won't hammer them.
+API_CHECK_SECONDS = 60
 _llm_check: dict = {"at": float("-inf"), "result": None}
+_embedding_check: dict = {"at": float("-inf"), "result": None}
+
+
+def check_embeddings() -> dict:
+    if time.monotonic() - _embedding_check["at"] < API_CHECK_SECONDS:
+        return _embedding_check["result"]
+    try:
+        dims = len(retrieval.embed_query("health check"))
+        result = {"ok": True, "model": retrieval.EMBEDDING_API_MODEL, "dimensions": dims}
+    except retrieval.RetrievalError as e:
+        result = {"ok": False, "model": retrieval.EMBEDDING_API_MODEL, "error": str(e)}
+    _embedding_check.update(at=time.monotonic(), result=result)
+    return result
 
 
 def check_llm() -> dict:
-    if time.monotonic() - _llm_check["at"] < LLM_CHECK_SECONDS:
+    if time.monotonic() - _llm_check["at"] < API_CHECK_SECONDS:
         return _llm_check["result"]
     try:
         models = llm.list_models()
@@ -188,6 +203,7 @@ def health() -> JSONResponse:
         checks["database"] = {"ok": count > 0, "chunks": count}
     except Exception as e:  # noqa: BLE001 - report any failure, never crash
         checks["database"] = {"ok": False, "error": str(e)}
+    checks["embeddings"] = check_embeddings()
     checks["llm"] = check_llm()
     healthy = all(c["ok"] for c in checks.values())
     return JSONResponse({"status": "ok" if healthy else "degraded", **checks}, status_code=200 if healthy else 503)
