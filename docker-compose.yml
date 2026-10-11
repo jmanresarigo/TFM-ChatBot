@@ -1,4 +1,4 @@
-# The whole app: database + web app. Ollama stays on the host (the GPU).
+# The whole app: database + web app. The LLM is a hosted API (Groq), set in .env.
 #
 #   docker compose up -d --build   build the app image and start both services
 #   docker compose up -d db        only the database (for local development)
@@ -30,20 +30,17 @@ services:
     build: .
     image: tfm-chatbot
     container_name: tfm-app
-    env_file: .env # LLM_MODEL, EMBEDDING_MODEL, ... (secrets enter at run time, not in the image)
+    env_file: .env # LLM_*, EMBEDDING_MODEL, ... (secrets enter at run time, not in the image)
     environment:
-      # These two override .env: inside a container, 127.0.0.1 is the container itself.
+      # Overrides .env: inside a container, 127.0.0.1 is the container itself.
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      LLM_BASE_URL: http://host.docker.internal:11434
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # built into Docker Desktop; needed on plain Linux
     ports:
       - "127.0.0.1:8080:8000" # your PC's port 8080 -> the container's port 8000
     depends_on:
       db:
         condition: service_healthy # start only once Postgres is ready
     healthcheck:
-      # Calls the app's own /health endpoint; fails on 503 (database or Ollama down).
+      # Calls the app's own /health endpoint; fails on 503 (database or LLM API down).
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 30s
       timeout: 10s

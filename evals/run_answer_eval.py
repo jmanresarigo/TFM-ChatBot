@@ -2,7 +2,10 @@
 
 Step 1 - generate (Layer 1: deterministic checks)
     python evals/run_answer_eval.py generate
-    Runs all questions through app/llm.py's ask() and checks with plain code:
+    Runs all questions through app/llm.py's ask(), i.e. through the same LLM API
+    as the deployed app (Groq). Groq's free tier allows 8,000 tokens per minute,
+    so the run waits when rate limited: expect ~15-20 minutes for 40 questions.
+    Then it checks with plain code:
       - unanswerable questions: was the refusal sentence used?
       - answerable questions: false refusals, invalid citations ([7] with 5
         excerpts), uncited answers, and whether a cited chunk is an expected page
@@ -11,7 +14,8 @@ Step 1 - generate (Layer 1: deterministic checks)
 Step 2 - judge (Layer 2: LLM as judge, a DIFFERENT model family)
     python evals/run_answer_eval.py judge          # judges the most recent run
     python evals/run_answer_eval.py judge data/eval_runs/<run>.jsonl
-    A second local model (JUDGE_MODEL in .env) grades each answered question:
+    A local model on your GPU (JUDGE_MODEL in .env, via Ollama) grades each
+    answered question, so judging costs no API quota and the excerpts stay local:
       - correctness 0/1/2 against the key facts in questions.jsonl
       - faithfulness: is every claim supported by the excerpts?
 
@@ -44,6 +48,10 @@ RUNS_DIR = ROOT / "data" / "eval_runs"
 RESULTS_DIR = ROOT / "evals" / "results"
 
 JUDGE_MODEL = os.getenv("JUDGE_MODEL", "")
+# The judge runs in a local Ollama, through Ollama's own API (not the OpenAI-
+# compatible one): only the native API can set the context size per request,
+# and a judge prompt that doesn't fit would be cut silently.
+JUDGE_BASE_URL = os.getenv("JUDGE_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
 JUDGE_PROMPT_FILE = ROOT / os.getenv("JUDGE_PROMPT", "prompts/judge_v1.md")
 
 # Ollama forces the judge's output to match this JSON schema. "reasoning" comes
@@ -133,7 +141,16 @@ def layer1_checks(q: dict, result: dict) -> dict:
     }
 
 
+def family(model: str) -> str:
+    """'qwen/qwen3.8-27b' -> 'qwen', 'gemma4:26b' -> 'gemma', 'openai/gpt-oss-120b' -> 'gpt'."""
+    base = model.split("/")[-1].split(":")[0].lower()
+    match = re.match(r"[a-z]+", base)
+    return match.group(0) if match else base
+
+
 def generate() -> Path:
+    # Nobody is waiting on a page here: wait as long as the rate limit requires.
+    llm.MAX_RETRY_WAIT = 300
     questions = load_jsonl(QUESTIONS_FILE)
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}_{safe_name(llm.LLM_MODEL)}"
     print(f"Run {run_id}: {len(questions)} questions, model {llm.LLM_MODEL}\n")
@@ -177,6 +194,7 @@ def generate() -> Path:
     save_jsonl(run_file, rows)
     config = {
         "llm_model": llm.LLM_MODEL,
+        "llm_provider": llm.LLM_BASE_URL,
         "system_prompt": llm.SYSTEM_PROMPT_FILE.name,
         "embedding_model": retrieval.EMBEDDING_MODEL,
         "top_k": llm.TOP_K,
@@ -228,11 +246,14 @@ def judge_one(row: dict, system_prompt: str) -> dict:
         "format": JUDGE_SCHEMA,  # forces valid JSON with exactly these fields
         "options": {"temperature": 0, "num_ctx": 8192},
     }
-    response = httpx.post(
-        f"{llm.LLM_BASE_URL}/api/chat",
-        json=payload,
-        timeout=httpx.Timeout(10, read=600),
-    )
+    try:
+        response = httpx.post(
+            f"{JUDGE_BASE_URL}/api/chat",
+            json=payload,
+            timeout=httpx.Timeout(10, read=600),
+        )
+    except httpx.ConnectError:
+        raise SystemExit(f"Cannot reach Ollama at {JUDGE_BASE_URL}. Is it running?") from None
     if response.status_code == 404:
         raise SystemExit(
             f"Judge model '{JUDGE_MODEL}' not found. Run: ollama pull {JUDGE_MODEL}"
@@ -246,9 +267,10 @@ def judge(run_file: Path) -> None:
         raise SystemExit(
             "Set JUDGE_MODEL in .env (a different model family than LLM_MODEL)."
         )
-    if JUDGE_MODEL.split(":")[0] == llm.LLM_MODEL.split(":")[0]:
+    if family(JUDGE_MODEL) == family(llm.LLM_MODEL):
         print(
-            f"Warning: judge '{JUDGE_MODEL}' looks like the same family as '{llm.LLM_MODEL}'."
+            f"Warning: judge '{JUDGE_MODEL}' looks like the same family as '{llm.LLM_MODEL}' "
+            "(self-preference bias)."
         )
 
     rows = load_jsonl(run_file)

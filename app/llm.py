@@ -1,4 +1,9 @@
-"""Answer a question with the local LLM, grounded in retrieved chunks: the "G" in RAG.
+"""Answer a question with an LLM, grounded in retrieved chunks: the "G" in RAG.
+
+The LLM is reached through the OpenAI-compatible chat API, the format most
+providers speak: Groq (default), OpenAI, OpenRouter, ... and also a local Ollama
+(http://127.0.0.1:11434/v1). Switching provider = changing LLM_BASE_URL,
+LLM_API_KEY and LLM_MODEL in .env; no code changes.
 
 Flow for one question (history = earlier user/assistant turns, may be empty):
     1. route_question()    -> with history, one short LLM call decides whether
@@ -9,7 +14,7 @@ Flow for one question (history = earlier user/assistant turns, may be empty):
                               skipped when no search is needed
     3. build_messages()    -> system prompt + history (oldest turns dropped if
                               they don't fit) + numbered excerpts [1]..[5] + question
-    4. stream_chat()       -> sends the messages to Ollama, yields the answer
+    4. stream_chat()       -> sends the messages to the LLM API, yields the answer
                               piece by piece as it is generated
     5. check_citations     -> maps [n] in the answer back to document and pages,
                               and flags citations to excerpts that don't exist
@@ -26,6 +31,7 @@ import re
 import sys
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -33,22 +39,33 @@ import httpx
 import retrieval  # also loads .env
 
 ROOT = Path(__file__).resolve().parent.parent
-LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://127.0.0.1:11434")
-LLM_MODEL = os.getenv("LLM_MODEL", "gemma4:12b")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")  # empty for a local Ollama
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen/qwen3.8-27b")
+# Thinking before answering: "none" turns it off for Qwen (faster, and all
+# tokens go to the answer). gpt-oss models can't turn it off: use "low".
+# Empty = don't send the setting (e.g. for a local Ollama).
+LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "none")
+# The router (search or not?) may use a different model, so its calls don't
+# use up the main model's quota. Defaults to the main model.
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", LLM_MODEL)
+ROUTER_REASONING_EFFORT = os.getenv("ROUTER_REASONING_EFFORT", LLM_REASONING_EFFORT)
 SYSTEM_PROMPT_FILE = ROOT / os.getenv("SYSTEM_PROMPT", "prompts/system_v3.md")
 ROUTE_PROMPT_FILE = ROOT / "prompts" / "route_v1.md"
 
 REFUSAL = "I don't know based on the provided documents."
 TOP_K = 5
 
-# Context window in tokens: everything the model sees at once (system prompt,
-# history, excerpts, question) plus the answer it writes. Ollama's default can
-# be smaller, and when the input doesn't fit it drops text SILENTLY.
+# Token budget per request: everything the model sees (system prompt, history,
+# excerpts, question) plus the answer. The model itself accepts more, but
+# Groq's free tier allows 8,000 tokens per minute, so one request must stay
+# below that anyway. History is trimmed to fit (see trim_history).
 NUM_CTX = int(os.getenv("LLM_NUM_CTX", "8192"))
-OPTIONS = {
-    "temperature": 0.1,  # stick to the most likely wording instead of being creative
-    "num_ctx": NUM_CTX,
-}
+TEMPERATURE = 0.1  # stick to the most likely wording instead of being creative
+MAX_ANSWER_TOKENS = 1024  # caps the answer length, and so the quota one answer can use
+# On "too many requests" (HTTP 429) wait and retry, up to this many seconds in
+# total. Short for the web app (a user is waiting); the eval script raises it.
+MAX_RETRY_WAIT = float(os.getenv("LLM_MAX_RETRY_WAIT", "20"))
 # Tokens kept free for the system prompt (~600), 5 excerpts (~2000), the
 # question and the answer. Conversation history gets whatever is left.
 RESERVED_TOKENS = 4096
@@ -59,8 +76,23 @@ CITATION = re.compile(r"\s*\[\d+\]")
 
 
 class LLMError(Exception):
-    """Ollama unreachable, model missing, or an error from the model server.
-    Raised instead of SystemExit so the web server keeps running."""
+    """API unreachable, key rejected, model missing, rate limit exhausted, or
+    another error from the provider. Raised instead of SystemExit so the web
+    server keeps running."""
+
+
+@dataclass(frozen=True)
+class Endpoint:
+    """Where and how to call a model: the provider's URL, key, model name."""
+
+    base_url: str
+    api_key: str
+    model: str
+    reasoning_effort: str = ""
+
+
+MAIN = Endpoint(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, LLM_REASONING_EFFORT)
+ROUTER = Endpoint(LLM_BASE_URL, LLM_API_KEY, ROUTER_MODEL, ROUTER_REASONING_EFFORT)
 
 
 def load_system_prompt() -> str:
@@ -112,7 +144,7 @@ def trim_history(history: list[dict], budget: int) -> tuple[list[dict], int]:
 def build_messages(
     question: str, chunks: list[dict], history: list[dict] | None = None
 ) -> tuple[list[dict], int]:
-    """The full message list for Ollama, and how many history messages were
+    """The full message list for the LLM, and how many history messages were
     dropped to fit the context window."""
     kept, dropped = trim_history(clean_history(history or []), NUM_CTX - RESERVED_TOKENS)
     messages = [
@@ -123,10 +155,13 @@ def build_messages(
     return messages, dropped
 
 
+# Strict schemas: the provider guarantees the reply is JSON with exactly these
+# fields ("strict" requires every field listed in "required" and no extras).
 ROUTE_SCHEMA = {
     "type": "object",
     "properties": {"search": {"type": "boolean"}, "query": {"type": "string"}},
     "required": ["search", "query"],
+    "additionalProperties": False,
 }
 
 
@@ -157,8 +192,7 @@ def route_question(question: str, history: list[dict] | None) -> dict:
             "content": "Conversation:\n" + "\n".join(lines) + f"\n\nLatest message: {question}",
         },
     ]
-    options = {"temperature": 0, "num_ctx": NUM_CTX, "num_predict": 150}
-    raw = "".join(stream_chat(messages, {}, options, schema=ROUTE_SCHEMA))
+    raw = chat_json(messages, ROUTE_SCHEMA, endpoint=ROUTER, max_tokens=150)
     try:
         decision = json.loads(raw)
         search, query = bool(decision["search"]), str(decision["query"]).strip()
@@ -179,77 +213,162 @@ def context_usage(stats: dict) -> dict:
 
 # ---------------------------------------------------------------- model server
 
+_client = httpx.Client(timeout=httpx.Timeout(10, read=300))  # reused: keeps connections open
+
+
+def _payload(endpoint: Endpoint, messages: list[dict], **fields) -> dict:
+    payload = {"model": endpoint.model, "messages": messages, **fields}
+    if endpoint.reasoning_effort:
+        payload["reasoning_effort"] = endpoint.reasoning_effort
+    return payload
+
+
+def _headers(endpoint: Endpoint) -> dict:
+    return {"Authorization": f"Bearer {endpoint.api_key}"} if endpoint.api_key else {}
+
+
+def _error(endpoint: Endpoint, response: httpx.Response) -> LLMError:
+    """A readable error for a failed request (the body has already been read)."""
+    try:
+        detail = response.json().get("error", {}).get("message", response.text)
+    except ValueError:
+        detail = response.text
+    if response.status_code == 401:
+        return LLMError(f"The API key was rejected by {endpoint.base_url}. Check LLM_API_KEY in .env.")
+    if response.status_code == 404:
+        return LLMError(f"Model '{endpoint.model}' not found at {endpoint.base_url}: {detail}")
+    if response.status_code == 429:
+        return LLMError(f"Rate limit reached for '{endpoint.model}' (free tier). Try again in a minute. {detail}")
+    return LLMError(f"LLM API returned {response.status_code}: {detail}")
+
+
+def _retry_delay(response: httpx.Response) -> float:
+    """Seconds to wait before retrying a 429/503, from the retry-after header."""
+    try:
+        return max(float(response.headers.get("retry-after", "2")), 0.5)
+    except ValueError:
+        return 2.0
+
+
+def _send(endpoint: Endpoint, payload: dict, stream: bool):
+    """Open the request, waiting and retrying while the provider says
+    "too many requests" (429) or "busy" (503), within MAX_RETRY_WAIT seconds.
+    Returns an open response (the caller must close it)."""
+    waited = 0.0
+    while True:
+        try:
+            request = _client.build_request(
+                "POST", f"{endpoint.base_url}/chat/completions", json=payload, headers=_headers(endpoint)
+            )
+            response = _client.send(request, stream=stream)
+        except httpx.ConnectError:
+            raise LLMError(f"Cannot reach the LLM API at {endpoint.base_url}. Check LLM_BASE_URL and your connection.") from None
+        except httpx.TimeoutException:
+            raise LLMError(f"The LLM API at {endpoint.base_url} did not answer in time.") from None
+        if response.status_code == 200:
+            return response
+        response.read()
+        if response.status_code in (429, 503):
+            delay = _retry_delay(response)
+            if waited + delay <= MAX_RETRY_WAIT:
+                print(f"  (rate limited by the LLM API, waiting {delay:.0f} s)", file=sys.stderr)
+                response.close()
+                time.sleep(delay)
+                waited += delay
+                continue
+        response.close()
+        raise _error(endpoint, response)
+
 
 def stream_chat(
-    messages: list[dict], stats: dict, options: dict | None = None, schema: dict | None = None
+    messages: list[dict],
+    stats: dict,
+    endpoint: Endpoint = MAIN,
+    max_tokens: int = MAX_ANSWER_TOKENS,
 ) -> Iterator[str]:
-    """Send messages to Ollama's /api/chat and yield the answer text as it arrives.
+    """Send messages to the chat API and yield the answer text as it arrives.
 
-    With "stream": true, Ollama answers with one JSON object per line, each
-    holding the next few characters; the last one ("done": true) carries the
-    statistics stored in `stats` (see read_stats). With a JSON `schema`, Ollama
-    forces the output to be JSON matching it (used by route_question).
+    With "stream": true the API answers with Server-Sent Events: lines
+    "data: {json}", each holding the next few characters in
+    choices[0].delta.content, and finally "data: [DONE]". With
+    stream_options.include_usage, the last chunk carries token counts, stored
+    in `stats` (see read_stats).
     """
-    payload = {
-        "model": LLM_MODEL,
-        "messages": messages,
-        "stream": True,
-        "think": False,  # no visible reasoning step: faster, and keeps it out of the answer
-        "options": options or OPTIONS,
-    }
-    if schema:
-        payload["format"] = schema
-    url = f"{LLM_BASE_URL}/api/chat"
+    payload = _payload(
+        endpoint,
+        messages,
+        stream=True,
+        stream_options={"include_usage": True},
+        temperature=TEMPERATURE,
+        max_tokens=max_tokens,
+    )
+    response = _send(endpoint, payload, stream=True)
     try:
-        with httpx.stream(
-            "POST", url, json=payload, timeout=httpx.Timeout(10, read=300)
-        ) as response:
-            if response.status_code != 200:
-                response.read()
-                detail = response.text
-                if response.status_code == 404:
-                    raise LLMError(
-                        f"Model '{LLM_MODEL}' not found. Run: ollama pull {LLM_MODEL}"
-                    )
-                raise LLMError(f"Ollama returned {response.status_code}: {detail}")
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                data = json.loads(line)
-                if data.get("error"):
-                    raise LLMError(f"Ollama error: {data['error']}")
-                piece = data.get("message", {}).get("content", "")
+        for line in response.iter_lines():
+            if not line.startswith("data:"):
+                continue  # blank lines and SSE comments
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if chunk.get("error"):
+                raise LLMError(f"LLM API error: {chunk['error']}")
+            for choice in chunk.get("choices", []):
+                piece = (choice.get("delta") or {}).get("content")
                 if piece:
                     yield piece
-                if data.get("done"):
-                    stats.update(read_stats(data))
-    except httpx.ConnectError:
-        raise LLMError(
-            f"Cannot reach Ollama at {LLM_BASE_URL}. Is it running? "
-            f"Check with: curl.exe {LLM_BASE_URL}"
-        ) from None
+            usage = chunk.get("usage") or (chunk.get("x_groq") or {}).get("usage")
+            if usage:
+                stats.update(read_stats(usage))
+    finally:
+        response.close()
 
 
-def read_stats(data: dict) -> dict:
-    """Token counts and timings from Ollama's final message.
+def chat_json(
+    messages: list[dict], schema: dict, endpoint: Endpoint = MAIN, max_tokens: int = 300
+) -> str:
+    """One non-streamed call whose reply must be JSON matching `schema`
+    (strict structured output). Returns the raw JSON text; callers parse it."""
+    payload = _payload(
+        endpoint,
+        messages,
+        temperature=0,
+        max_tokens=max_tokens,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "reply", "strict": True, "schema": schema},
+        },
+    )
+    response = _send(endpoint, payload, stream=False)
+    try:
+        return response.json()["choices"][0]["message"]["content"] or ""
+    finally:
+        response.close()
 
-    Ollama's own names: prompt_eval_* = reading the input, eval_* = writing the
-    output. Durations are in nanoseconds.
-      input tokens   system prompt + history + excerpts + question, read in one
-                     parallel pass ("prefill"); this is what delays the first word
-      output tokens  the answer, generated one token at a time ("decode");
-                     this sets the speed at which text appears
+
+def list_models(endpoint: Endpoint = MAIN) -> list[str]:
+    """Model names the provider offers with this key (GET /models)."""
+    try:
+        response = _client.get(f"{endpoint.base_url}/models", headers=_headers(endpoint), timeout=5)
+    except httpx.HTTPError as e:
+        raise LLMError(f"Cannot reach the LLM API at {endpoint.base_url}: {e}") from None
+    if response.status_code != 200:
+        raise _error(endpoint, response)
+    return [m["id"] for m in response.json().get("data", [])]
+
+
+def read_stats(usage: dict) -> dict:
+    """Token counts (and timings, when the provider reports them) for one call.
+
+      input tokens   system prompt + history + excerpts + question
+      output tokens  the answer (plus hidden reasoning, for models that think)
+    Groq also reports how long it spent reading the input and writing the output.
     """
-
-    def seconds(key: str) -> float:
-        return data.get(key, 0) / 1e9
-
     return {
-        "input_tokens": data.get("prompt_eval_count", 0),
-        "input_seconds": seconds("prompt_eval_duration"),
-        "output_tokens": data.get("eval_count", 0),
-        "output_seconds": seconds("eval_duration"),
-        "load_seconds": seconds("load_duration"),  # loading the model into VRAM
+        "input_tokens": usage.get("prompt_tokens", 0),
+        "output_tokens": usage.get("completion_tokens", 0),
+        "input_seconds": usage.get("prompt_time", 0.0),
+        "output_seconds": usage.get("completion_time", 0.0),
     }
 
 
@@ -346,8 +465,6 @@ def print_report(result: dict) -> None:
         print(f"  route + rewrite  {t['route']:6.2f} s")
     if result["searched"]:
         print(f"  retrieval        {t['retrieval']:6.2f} s")
-    if s.get("load_seconds", 0) > 0.5:
-        print(f"  model load       {s['load_seconds']:6.2f} s  (first request after a pause)")
     print(
         f"  input tokens     {s.get('input_tokens', 0):6d}    read in "
         f"{s.get('input_seconds', 0):5.2f} s  ({speed(s.get('input_tokens', 0), s.get('input_seconds', 0)):,.0f} tokens/s)"

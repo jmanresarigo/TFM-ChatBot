@@ -6,7 +6,6 @@ model) is skipped."""
 
 import json
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -31,7 +30,7 @@ def events(response):
 def fake_rag(monkeypatch):
     """Retrieval returns one chunk; the model answers in two pieces."""
 
-    def stream_chat(messages, stats, options=None, schema=None):
+    def stream_chat(messages, stats, **kwargs):
         yield "The answer "
         yield "is beta [1]."
         stats.update({"input_tokens": 900, "output_tokens": 100})
@@ -93,11 +92,12 @@ def test_health_reports_503_when_dependencies_are_down(monkeypatch):
     def no_database():
         raise retrieval.RetrievalError("no database")
 
-    def no_ollama(*args, **kwargs):
-        raise httpx.ConnectError("refused")
+    def no_llm_api(*args, **kwargs):
+        raise llm.LLMError("cannot reach the API")
 
     monkeypatch.setattr(retrieval, "connect", no_database)
-    monkeypatch.setattr(main.httpx, "get", no_ollama)
+    monkeypatch.setattr(llm, "list_models", no_llm_api)
+    monkeypatch.setitem(main._llm_check, "at", float("-inf"))  # no cached result
     response = client.get("/health")
     assert response.status_code == 503
     body = response.json()
