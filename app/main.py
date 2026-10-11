@@ -4,22 +4,16 @@ Endpoints:
     GET  /           the chat page (app/static/index.html)
     POST /api/chat   {"question": "...", "history": [...]} -> the answer as a
                      stream of Server-Sent Events (SSE), see answer_stream()
-    GET  /health     is the server able to work? (database + Ollama)
+    GET  /health     is the server able to work? (database + LLM API)
 
 The server keeps no conversation state: the browser holds the history and
 sends it with every question. Resetting the conversation is just the browser
 forgetting it. This keeps the server simple, and any number of server copies
 can answer any request (useful once it is deployed).
 
-Two ways of running the app:
-Development (app runs on my PC's venv):
-    docker compose up -d db
-    uvicorn main:app --app-dir app --reload --port 8080
-    then open http://127.0.0.1:8000
-
-Packaged version (app runs on the container):
-    docker compose up -d --build
-    then open http://127.0.0.1:8000
+Run from the project root:
+    uvicorn main:app --app-dir app --reload
+then open http://127.0.0.1:8000
 """
 
 import json
@@ -30,7 +24,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-import httpx
 import psycopg
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -50,8 +43,8 @@ async def lifespan(app: FastAPI):
     log.info("Loading embedding model %s ...", retrieval.EMBEDDING_MODEL)
     retrieval.get_model()
     log.info(
-        "Ready. LLM: %s at %s, context window %d tokens, prompt %s",
-        llm.LLM_MODEL, llm.LLM_BASE_URL, llm.NUM_CTX, llm.SYSTEM_PROMPT_FILE.name,
+        "Ready. LLM: %s at %s (router: %s), token budget %d, prompt %s",
+        llm.LLM_MODEL, llm.LLM_BASE_URL, llm.ROUTER_MODEL, llm.NUM_CTX, llm.SYSTEM_PROMPT_FILE.name,
     )
     yield
 
@@ -162,6 +155,28 @@ def chat(request: ChatRequest) -> StreamingResponse:
     )
 
 
+# The LLM check calls the provider, so its result is reused for a minute:
+# monitoring that calls /health every few seconds won't hammer the API.
+LLM_CHECK_SECONDS = 60
+_llm_check: dict = {"at": float("-inf"), "result": None}
+
+
+def check_llm() -> dict:
+    if time.monotonic() - _llm_check["at"] < LLM_CHECK_SECONDS:
+        return _llm_check["result"]
+    try:
+        models = llm.list_models()
+        needed = {llm.LLM_MODEL, llm.ROUTER_MODEL}
+        missing = sorted(needed - set(models))
+        result = {"ok": not missing, "model": llm.LLM_MODEL, "provider": llm.LLM_BASE_URL}
+        if missing:
+            result["error"] = f"model(s) not available with this key: {missing}"
+    except llm.LLMError as e:
+        result = {"ok": False, "provider": llm.LLM_BASE_URL, "error": str(e)}
+    _llm_check.update(at=time.monotonic(), result=result)
+    return result
+
+
 @app.get("/health")
 def health() -> JSONResponse:
     """Checks the two dependencies. 200 if both work, 503 otherwise, so that
@@ -173,14 +188,7 @@ def health() -> JSONResponse:
         checks["database"] = {"ok": count > 0, "chunks": count}
     except Exception as e:  # noqa: BLE001 - report any failure, never crash
         checks["database"] = {"ok": False, "error": str(e)}
-    try:
-        tags = httpx.get(f"{llm.LLM_BASE_URL}/api/tags", timeout=3).json()
-        models = [m["name"] for m in tags.get("models", [])]
-        checks["llm"] = {"ok": llm.LLM_MODEL in models, "model": llm.LLM_MODEL}
-        if llm.LLM_MODEL not in models:
-            checks["llm"]["error"] = f"model not pulled; available: {models}"
-    except Exception as e:  # noqa: BLE001
-        checks["llm"] = {"ok": False, "error": f"Ollama unreachable at {llm.LLM_BASE_URL}: {e}"}
+    checks["llm"] = check_llm()
     healthy = all(c["ok"] for c in checks.values())
     return JSONResponse({"status": "ok" if healthy else "degraded", **checks}, status_code=200 if healthy else 503)
 

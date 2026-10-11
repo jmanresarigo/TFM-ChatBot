@@ -1,6 +1,10 @@
-"""Prompt building, citations, history and routing (app/llm.py). The model
-server is never called: stream_chat is replaced by a fake where needed."""
+"""Prompt building, citations, history, routing and the API client (app/llm.py).
+No real API is ever called: model calls are replaced by fakes, and the HTTP
+client tests use httpx.MockTransport, a fake server inside the test."""
 
+import json
+
+import httpx
 import pytest
 
 import llm
@@ -11,13 +15,13 @@ CHUNKS = [
 ]
 
 
-def fake_model(reply):
-    """A stand-in for stream_chat that 'generates' a fixed reply."""
+def fake_json_model(reply):
+    """A stand-in for chat_json that 'generates' a fixed reply."""
 
-    def stream_chat(messages, stats, options=None, schema=None):
-        yield reply
+    def chat_json(messages, schema, endpoint=None, max_tokens=300):
+        return reply
 
-    return stream_chat
+    return chat_json
 
 
 # --- citations -------------------------------------------------------------------
@@ -98,7 +102,7 @@ def test_first_question_is_searched_without_calling_the_model(monkeypatch):
     def must_not_be_called(*args, **kwargs):
         raise AssertionError("the model should not be called without history")
 
-    monkeypatch.setattr(llm, "stream_chat", must_not_be_called)
+    monkeypatch.setattr(llm, "chat_json", must_not_be_called)
     assert llm.route_question("What is beta?", []) == {"search": True, "query": "What is beta?"}
 
 
@@ -112,20 +116,116 @@ def test_first_question_is_searched_without_calling_the_model(monkeypatch):
     ],
 )
 def test_route_question_reads_the_model_decision(monkeypatch, reply, expected):
-    monkeypatch.setattr(llm, "stream_chat", fake_model(reply))
+    monkeypatch.setattr(llm, "chat_json", fake_json_model(reply))
     assert llm.route_question("and its time step?", HISTORY) == expected
 
 
 # --- statistics ------------------------------------------------------------------------
 
 
-def test_read_stats_converts_nanoseconds():
-    stats = llm.read_stats({"prompt_eval_count": 100, "prompt_eval_duration": 2e9, "eval_count": 50, "eval_duration": 5e8})
-    assert stats["input_tokens"] == 100
-    assert stats["input_seconds"] == 2.0
-    assert stats["output_seconds"] == 0.5
+def test_read_stats_from_usage():
+    stats = llm.read_stats({"prompt_tokens": 100, "completion_tokens": 50, "prompt_time": 0.2})
+    assert stats == {"input_tokens": 100, "output_tokens": 50, "input_seconds": 0.2, "output_seconds": 0.0}
 
 
 def test_context_usage_percent():
     usage = llm.context_usage({"input_tokens": 3000, "output_tokens": 1096})
     assert usage == {"used": 4096, "limit": llm.NUM_CTX, "percent": round(100 * 4096 / llm.NUM_CTX, 1)}
+
+
+# --- HTTP client (fake server) ------------------------------------------------------
+
+ENDPOINT = llm.Endpoint("https://api.example.com/v1", "secret-key", "some-model", "none")
+
+
+def sse_body(*pieces, usage=None):
+    """A streamed chat response in the OpenAI format."""
+    lines = [f"data: {json.dumps({'choices': [{'delta': {'content': p}}]})}" for p in pieces]
+    if usage:
+        lines.append(f"data: {json.dumps({'choices': [], 'usage': usage})}")
+    lines.append("data: [DONE]")
+    return "\n\n".join(lines) + "\n\n"
+
+
+@pytest.fixture
+def fake_server(monkeypatch):
+    """Replace the HTTP client with one whose requests go to `handler`."""
+
+    def install(handler):
+        monkeypatch.setattr(llm, "_client", httpx.Client(transport=httpx.MockTransport(handler)))
+
+    return install
+
+
+def test_stream_chat_yields_text_and_records_usage(fake_server):
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers["authorization"]
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, text=sse_body("The answer ", "is beta [1].", usage={"prompt_tokens": 900, "completion_tokens": 12}))
+
+    fake_server(handler)
+    stats = {}
+    text = "".join(llm.stream_chat([{"role": "user", "content": "q"}], stats, endpoint=ENDPOINT))
+    assert text == "The answer is beta [1]."
+    assert stats["input_tokens"] == 900 and stats["output_tokens"] == 12
+    assert seen["auth"] == "Bearer secret-key"
+    assert seen["body"]["model"] == "some-model"
+    assert seen["body"]["stream"] is True
+    assert seen["body"]["reasoning_effort"] == "none"
+
+
+def test_rate_limit_is_retried_after_waiting(fake_server, monkeypatch):
+    monkeypatch.setattr(llm.time, "sleep", lambda seconds: None)  # don't actually wait
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"retry-after": "3"}, json={"error": {"message": "slow down"}})
+        return httpx.Response(200, text=sse_body("ok"))
+
+    fake_server(handler)
+    assert "".join(llm.stream_chat([], {}, endpoint=ENDPOINT)) == "ok"
+    assert len(calls) == 2
+
+
+def test_rate_limit_gives_up_beyond_the_wait_budget(fake_server, monkeypatch):
+    monkeypatch.setattr(llm, "MAX_RETRY_WAIT", 5)
+    fake_server(lambda request: httpx.Response(429, headers={"retry-after": "60"}, json={"error": {"message": "slow down"}}))
+    with pytest.raises(llm.LLMError, match="Rate limit"):
+        list(llm.stream_chat([], {}, endpoint=ENDPOINT))
+
+
+def test_rejected_key_gives_a_clear_error(fake_server):
+    fake_server(lambda request: httpx.Response(401, json={"error": {"message": "Invalid API Key"}}))
+    with pytest.raises(llm.LLMError, match="LLM_API_KEY"):
+        list(llm.stream_chat([], {}, endpoint=ENDPOINT))
+
+
+def test_chat_json_requests_strict_schema(fake_server):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"search": false, "query": ""}'}}]})
+
+    fake_server(handler)
+    reply = llm.chat_json([], llm.ROUTE_SCHEMA, endpoint=ENDPOINT)
+    assert json.loads(reply) == {"search": False, "query": ""}
+    fmt = seen["body"]["response_format"]
+    assert fmt["type"] == "json_schema" and fmt["json_schema"]["strict"] is True
+    assert "stream" not in seen["body"]  # one complete reply, not streamed
+
+
+def test_no_key_sends_no_authorization_header(fake_server):
+    seen = {}
+
+    def handler(request):
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"data": [{"id": "local-model"}]})
+
+    fake_server(handler)
+    assert llm.list_models(llm.Endpoint("http://127.0.0.1:11434/v1", "", "local-model")) == ["local-model"]
+    assert seen["auth"] is None
