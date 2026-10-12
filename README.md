@@ -1,237 +1,332 @@
 # TFM Chatbot
 
 [![CI](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![PostgreSQL + pgvector](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)
 
-A chat assistant that answers questions about my Master's thesis, *Spiking Neural Networks for Lift Coefficient Reconstruction in Extreme Vortex-Gust Airfoil Interactions*, and the papers it cites. Answers come only from the documents, with citations to document and page (retrieval-augmented generation, RAG).
+A retrieval-augmented generation (RAG) chat assistant that answers questions about a Master's thesis, *Spiking Neural Networks for Lift Coefficient Reconstruction in Extreme Vortex-Gust Airfoil Interactions*, and the literature it cites. Every answer is grounded in the documents and cites them in IEEE style, down to the page.
 
-**Status:** deployed on Railway (password-protected), with CI/CD from `main`. Next: observability (Phase 8).
+The project was built to learn the full lifecycle of an AI application: document ingestion, hybrid retrieval, evaluation, LLM integration, a streaming web app, containers, continuous integration and cloud deployment.
 
-Built as a learning project for the full lifecycle of an AI application: ingestion, retrieval, evaluation, an LLM API, a web app, Docker, CI, and cloud deployment.
+> [!NOTE]
+> The documents themselves are **not** part of this repository: the thesis is unpublished and the cited papers are copyrighted. The code, prompts and tests are here; to run the app you supply your own PDFs (see [Adding documents](#adding-documents)).
 
----
+## Table of contents
 
-## Architecture
+- [Features](#features)
+- [How it works](#how-it-works)
+- [Tech stack](#tech-stack)
+- [Repository structure](#repository-structure)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Adding documents](#adding-documents)
+- [API](#api)
+- [Testing and CI](#testing-and-ci)
+- [Evaluation](#evaluation)
+- [Deployment](#deployment)
+- [Data, privacy and security](#data-privacy-and-security)
+- [Known limitations](#known-limitations)
+- [License](#license)
+- [Author](#author)
 
+## Features
+
+- **Grounded answers.** The model answers only from retrieved excerpts and says so when the documents don't contain the answer.
+- **IEEE citations.** Each claim carries a numbered citation. Under the answer, a collapsible reference list gives the full IEEE entry of each document, the pages used and a DOI link.
+- **Hybrid search.** Semantic (vector) search and keyword (full-text) search, merged with weighted Reciprocal Rank Fusion.
+- **Conversation memory.** Follow-up questions ("and its time step?") are rewritten into standalone search queries; questions about the conversation itself skip the search.
+- **Streaming.** Answers appear word by word (Server-Sent Events), rendered as Markdown with LaTeX math.
+- **Citation checks.** Citations to excerpts that were never retrieved are flagged in the interface.
+- **Context meter.** Shows how much of the model's context window the conversation uses; the oldest messages are dropped when it is full.
+- **Evaluation suite.** Retrieval metrics (hit@k, MRR) and answer quality scored by a local LLM judge.
+- **Clear limit messages.** When a free-tier API limit is reached, the chat says which limit and shows a countdown until the user can ask again.
+- **Stateless server.** The browser keeps the conversation; any server instance can answer any request.
+
+## How it works
+
+```mermaid
+flowchart LR
+    U([Browser]) -- "question + history (HTTPS)" --> A
+
+    subgraph Cloud["Cloud host (EU)"]
+        A["app<br/>FastAPI + chat page"] -- "private network" --> D[("db<br/>PostgreSQL + pgvector<br/>chunks: text + vectors")]
+    end
+
+    A -- "question" --> E["Embeddings API<br/>Qwen3-Embedding-0.6B"]
+    A -- "excerpts + question" --> L["LLM API<br/>OpenAI-compatible"]
+    A -. "answer stream (SSE)" .-> U
+
+    subgraph PC["Local machine (never deployed)"]
+        P[PDFs] --> I["parse → chunk → embed (GPU) → store"]
+        EV["evaluations<br/>local LLM judge"]
+    end
+    I --> D
 ```
-  Browser (anyone with the link + password)
-     │ HTTPS
-     ▼
- RAILWAY (EU West)                                        EXTERNAL APIs (free tiers)
- ┌───────────────────────────────────────────────┐
- │ app   FastAPI + chat page (Docker image)      │ ─────►  Cloudflare Workers AI
- │        │ private network                      │         embeds the QUESTION
- │        ▼ db.railway.internal:5432             │         (Qwen3-Embedding-0.6B)
- │ db    Postgres 17 + pgvector, on a volume     │
- │        2285 chunks: text + 1024-dim vectors   │ ─────►  Groq
- └───────────────────────────────────────────────┘         writes the ANSWER
-                                                            (Qwen 3.8 27B)
- MY PC (never deployed)
-   PDFs → parse → chunk → embed (GPU) → store ──► local DB and, when updating, Railway DB
-   evaluations: generation via Groq, judge on the local GPU (Ollama)
-```
 
-**How a question is answered**
+**Answering a question**
 
-1. **Route** (follow-up questions only): one short LLM call decides whether the documents are needed at all ("what did I ask first?" doesn't) and rewrites follow-ups ("and its time step?") into a standalone search query.
-2. **Embed** the query through Cloudflare, with the same model that embedded the chunks.
-3. **Hybrid search** in Postgres: vector search (meaning) + full-text search (exact terms), merged with Reciprocal Rank Fusion. Top 5 chunks.
-4. **Generate** with the LLM: system prompt + conversation history (trimmed to a token budget) + numbered excerpts + question. The answer streams to the browser (Server-Sent Events).
-5. **Check citations**: each `[n]` is mapped back to document and page; citations to non-existent excerpts are flagged.
+1. **Route** (follow-ups only): a short LLM call decides whether the documents are needed and rewrites the follow-up into a standalone query.
+2. **Embed** the query with the same model that embedded the documents.
+3. **Search** Postgres with vector search (meaning) and full-text search (exact terms), fused with weighted Reciprocal Rank Fusion (keyword list at half weight); keep the top 5 chunks.
+4. **Generate** the answer from a system prompt, the recent history (trimmed to a token budget), the numbered excerpts and the question, streaming it to the browser.
+5. **Check citations**: each `[n]` is mapped back to its document and pages; the browser renumbers them per document and shows the IEEE references.
 
-The server keeps no conversation state: the browser holds the history and sends it with each question.
+**Building the knowledge base** (offline, on a local machine)
+
+1. **Parse** each PDF page by page with PyMuPDF. The cleaning step fixes ligatures and broken accents, keeps printed page labels, and drops headers, footers, tables of contents and reference lists.
+2. **Chunk** the text into ~250-word passages along paragraph and sentence boundaries, with overlap. Headings stay attached to their text.
+3. **Embed** the chunks into 1024-dimensional vectors on the GPU.
+4. **Store** chunks and vectors in Postgres (HNSW vector index and GIN full-text index). Each reload runs in a single transaction.
 
 ## Tech stack
 
 | Area | Choice |
 |---|---|
 | Language, packaging | Python 3.12, [uv](https://docs.astral.sh/uv/) (`pyproject.toml` + `uv.lock`) |
-| PDF parsing | PyMuPDF, with custom cleaning (headers/footers, ligatures, page labels) |
-| Embeddings | Qwen3-Embedding-0.6B: locally (sentence-transformers, GPU) for ingestion; Cloudflare Workers AI for questions |
-| Vector database | PostgreSQL 17 + pgvector (HNSW index), full-text search (GIN) |
-| LLM | Groq, OpenAI-compatible API, `qwen/qwen3.8-27b` (any OpenAI-compatible provider works, including a local Ollama) |
-| Web | FastAPI, uvicorn, vanilla HTML/CSS/JS, Server-Sent Events; answers rendered as Markdown + math (marked, KaTeX, sanitized by DOMPurify, vendored in `app/static/vendor/`) |
-| Containers | Docker (slim image, no ML libraries, ~140 MB compressed), Docker Compose locally |
-| CI | GitHub Actions: ruff, pytest, Docker build + start-up test |
-| Hosting | Railway: app + database, deployed from `main` after CI passes |
+| PDF parsing | [PyMuPDF](https://pymupdf.readthedocs.io/) with custom cleaning |
+| Embeddings | [Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B): sentence-transformers on the GPU for ingestion; a hosted API (Cloudflare Workers AI) for questions |
+| Vector database | PostgreSQL 17 + [pgvector](https://github.com/pgvector/pgvector) (HNSW), full-text search (GIN) |
+| LLM | Any OpenAI-compatible API (deployed with Groq; a local Ollama also works) |
+| Web | FastAPI, uvicorn, Server-Sent Events; plain HTML/CSS/JS with [marked](https://marked.js.org/), [KaTeX](https://katex.org/) and [DOMPurify](https://github.com/cure53/DOMPurify) (vendored) |
+| Containers | Docker (slim image without ML libraries), Docker Compose |
+| CI/CD | GitHub Actions (ruff, pytest, Docker build and start-up test); deployment from `main` after CI passes |
+| Hosting | [Railway](https://railway.com/): app and database services |
 
 ## Repository structure
 
 ```
-app/
-  main.py            web server: chat API (SSE), health checks, password protection
-  llm.py             prompts, routing, history trimming, OpenAI-compatible LLM client
-  retrieval.py       question embedding (API), vector + keyword search, RRF fusion
-  references.json    IEEE reference of each document, shown under answers
-  static/index.html  chat page
-  static/vendor/     Markdown, math and sanitizer libraries (MIT / Apache-2.0)
-ingestion/
-  parse.py           PDF -> clean page text            (data/parsed/)
-  chunk.py           pages -> overlapping chunks       (data/chunks/)
-  embed.py           chunks -> vectors on the GPU      (data/embeddings/)
-  store.py           vectors + chunks -> Postgres
+app/                         the web application (this is what gets deployed)
+├── main.py                  FastAPI server: chat API (SSE), health checks, password protection
+├── llm.py                   prompts, routing, history trimming, OpenAI-compatible client
+├── retrieval.py             question embedding, vector + keyword search, RRF fusion
+├── references.json          IEEE reference of each document, keyed by PDF file name
+└── static/
+    ├── index.html           chat interface
+    └── vendor/              marked, DOMPurify, KaTeX (+ fonts)
+ingestion/                   offline pipeline that builds the database
+├── parse.py                 PDF -> clean page text
+├── chunk.py                 pages -> overlapping chunks
+├── embed.py                 chunks -> vectors (GPU)
+└── store.py                 chunks + vectors -> Postgres
 evals/
-  questions.jsonl    40 questions with answer keys (document + pages)
-  run_retrieval_eval.py   hit@k, MRR
-  run_answer_eval.py      deterministic checks + LLM judge
-  results/           score summaries (no document text)
-prompts/             system prompt versions, router prompt, judge prompt
-tests/               unit tests (made-up text, fakes; no real services)
-Dockerfile, docker-compose.yml, .github/workflows/ci.yml
+├── questions.jsonl          evaluation questions with answer keys (document + pages)
+├── run_retrieval_eval.py    hit@k and MRR
+├── run_answer_eval.py       deterministic checks + LLM judge
+└── results/                 score summaries only (no document text)
+prompts/                     versioned system, routing and judge prompts
+tests/                       unit tests (made-up text and fakes; no real services)
+data/                        NOT committed: PDFs and generated files (parsed/, chunks/, embeddings/)
+Dockerfile                   production image
+docker-compose.yml           local Postgres + app
+.env.example                 template for the configuration
+.github/workflows/ci.yml     continuous integration
 ```
 
-## Data and privacy
+## Getting started
 
-- **Never committed:** the PDFs (the thesis is unpublished; the papers are copyrighted), everything under `data/`, `.env`, model weights, database dumps.
-- **What leaves my PC, and where it goes:**
+### Prerequisites
 
-  | Data | Goes to | Notes |
-  |---|---|---|
-  | The question | Cloudflare Workers AI (embedding) | Cloudflare states it doesn't train on inputs |
-  | The question + 5 retrieved excerpts + recent history | Groq (answer generation) | Zero Data Retention enabled |
-  | All chunks (text + vectors) | Railway Postgres, EU West | private network only; the public address is opened only while loading data |
-  | The PDFs, parsed text, eval runs with excerpts, judge prompts | nowhere: stay on my PC | the judge runs locally |
+- Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- Docker (Docker Desktop on Windows/macOS)
+- An NVIDIA GPU is recommended for embedding the documents (CPU works, but slowly)
+- API keys for an OpenAI-compatible LLM provider and an embeddings provider (both have free tiers)
+- The PDFs you want to query
 
-- `evals/questions.jsonl` contains answer key facts taken from the unpublished thesis, which is one reason this repository is **private**. Before making it public, move that file out of the repository or replace it with a sanitized set.
-
-## Run locally
-
-**Requirements:** Python 3.12 with uv, Docker Desktop, the PDFs in `data/pdfs/`, a Groq API key and a Cloudflare account (free).
+### 1. Install
 
 ```bash
-uv sync                          # all dependencies, including ingestion (PyTorch) and dev tools
-cp .env.example .env             # then fill in the values (see Configuration)
-docker compose up -d db          # Postgres + pgvector on 127.0.0.1:5432
+git clone https://github.com/jmanresarigo/TFM-ChatBot.git
+cd TFM-ChatBot
+uv sync                      # runtime, ingestion (PyTorch) and dev dependencies
+cp .env.example .env         # then fill in your own values (see Configuration)
 ```
 
-**Build the database** (once, and again when documents change):
+### 2. Start the database
 
 ```bash
-python ingestion/parse.py
-python ingestion/chunk.py
-python ingestion/embed.py        # uses the GPU if available
-python ingestion/store.py
+docker compose up -d db      # Postgres + pgvector, reachable only from this machine
 ```
 
-**Run the app:**
+### 3. Build the knowledge base
+
+Put the PDFs in `data/` and run the pipeline once (and again whenever the documents change):
 
 ```bash
-uvicorn main:app --app-dir app --reload --port 8080      # development, auto-reload
-# or the packaged version, exactly as deployed:
+uv run python ingestion/parse.py     # optional: writes data/parsed/ for inspection
+uv run python ingestion/chunk.py
+uv run python ingestion/embed.py     # uses the GPU if available
+uv run python ingestion/store.py
+```
+
+### 4. Run the app
+
+```bash
+uv run uvicorn main:app --app-dir app --reload --port 8080   # development
+# or the production image, exactly as deployed:
 docker compose up -d --build
 ```
 
-Open http://127.0.0.1:8080. Other useful commands:
+Open <http://127.0.0.1:8080> and ask a question.
+
+Command-line tools for debugging:
 
 ```bash
-python app/retrieval.py "What is the membrane decay factor?"   # inspect search results
-python app/llm.py --chat                                        # chat in the terminal
+uv run python app/retrieval.py "What is the membrane decay factor?"   # show search results
+uv run python app/llm.py --chat                                        # chat in the terminal
 ```
 
 ## Configuration
 
-All settings are environment variables (`.env` locally, Railway variables in production). See `.env.example`.
+All settings are environment variables: a `.env` file locally (start from `.env.example`), the platform's variables in production. **Never commit `.env`.**
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres connection string |
-| `EMBEDDING_MODEL` | model whose vectors are stored (`Qwen/Qwen3-Embedding-0.6B`); must match ingestion |
-| `EMBEDDING_BASE_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_MODEL` | embeddings API for questions (Cloudflare, or a local Ollama) |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_REASONING_EFFORT` | LLM API (Groq, or any OpenAI-compatible provider) |
-| `ROUTER_MODEL` (optional) | separate model for routing, to use its own quota |
-| `APP_PASSWORD` | password for the chat page; empty = no password (local only) |
-| `JUDGE_MODEL`, `JUDGE_BASE_URL` | local evaluation judge (Ollama), a different model family than `LLM_MODEL` |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | credentials of the local Docker database |
+| `DATABASE_URL` | Postgres connection string used by the app and the ingestion scripts |
+| `EMBEDDING_MODEL` | model whose vectors are stored; must be the same at ingestion and query time |
+| `HF_HUB_OFFLINE` | `1` to load the local embedding model from cache without contacting Hugging Face |
+| `EMBEDDING_BASE_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_MODEL` | embeddings API used to embed questions |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | OpenAI-compatible LLM API |
+| `LLM_REASONING_EFFORT` | reasoning effort for models that support it |
+| `LLM_NUM_CTX` | token budget for prompt + history (default 8192) |
+| `ROUTER_MODEL` | optional separate model for the routing step |
+| `SYSTEM_PROMPT` | which prompt in `prompts/` to use (default `prompts/system_v3.md`) |
+| `APP_PASSWORD` | password for the web app; empty disables it (local use only) |
+| `JUDGE_MODEL`, `JUDGE_BASE_URL`, `JUDGE_PROMPT` | local LLM judge for the answer evaluation |
 
-## Deployment (Railway)
+## Adding documents
 
-Two services in one project, region EU West:
+1. Copy the PDF into `data/`. A PDF needs a text layer; scanned documents need OCR first.
+2. Add its reference to `app/references.json`, keyed by the file name. `*text*` is rendered in italics:
+   ```json
+   "Example2024_Paper.pdf": {
+     "text": "A. Author and B. Author, “Title of the paper,” *Journal Name*, vol. 1, no. 2, pp. 3–4, 2024.",
+     "url": "https://doi.org/10.xxxx/xxxxx"
+   }
+   ```
+   Documents without an entry are cited by their file name.
+3. Rebuild the knowledge base with `chunk.py`, `embed.py` and `store.py`. `store.py` replaces each document's chunks and removes documents that are no longer in `data/`.
+4. Re-run the retrieval evaluation to check that search quality hasn't dropped.
 
-| Service | Source | Key settings |
-|---|---|---|
-| `db` | Docker image `pgvector/pgvector:pg17` | volume at `/var/lib/postgresql/data`, `PGDATA=/var/lib/postgresql/data/pgdata`, SSL on (Debian's built-in certificate), private only |
-| `app` | this repository (`Dockerfile`), branch `main` | `DATABASE_URL` via reference variables (`${{db.POSTGRES_PASSWORD}}`, `${{db.RAILWAY_PRIVATE_DOMAIN}}`), API keys, `APP_PASSWORD`; health check `/health/live`; public HTTPS domain |
+## API
 
-Both services use **app sleeping** (serverless): they stop after a few idle minutes and wake on the next request, which keeps usage within the free allowance. The first request after a pause takes a few seconds longer.
+| Method and path | Description |
+|---|---|
+| `GET /` | chat interface |
+| `POST /api/chat` | body `{"question": str, "history": [{"role", "content"}]}`; responds with Server-Sent Events: `route`, `excerpts`, `token`, `done` or `error` |
+| `GET /health` | readiness: checks the database, the embeddings API and the LLM API; returns 200 or 503 |
+| `GET /health/live` | liveness: returns 200 as soon as the server is running |
+| `GET /static/...` | the interface's scripts, styles and fonts |
 
-**Updating the production database** (e.g. after adding a PDF): run the ingestion pipeline locally, then
-1. `db` → Settings → Networking → enable a **TCP Proxy** to port 5432;
-2. load from the PC: set `DATABASE_URL=postgresql://tfm:<password>@<proxy-host>:<proxy-port>/tfm?sslmode=require` in the terminal and run `python ingestion/store.py`;
-3. **delete the TCP proxy** again.
+When `APP_PASSWORD` is set, every path except the two health checks requires it (HTTP Basic authentication).
 
-`store.py` reloads everything from the local `data/` files in one transaction, so the live app switches from the old data to the new data at once.
+### When a free-tier limit is reached
 
-## CI/CD
+The app has no usage limits of its own: it is a private demo with very little traffic. Its two APIs have free-tier limits, though: tokens and requests per minute and per day for the LLM, and a daily allowance for the embeddings. When one is reached, the chat shows a notice instead of an answer, with a live countdown until the user can ask again. The notice says which limit was hit (for example "tokens per minute") and how long to wait.
 
-```
-pull request ──► CI: ruff · pytest · Docker build + start-up test
-merge to main ──► CI again on main ──► Railway waits for CI ("Wait for CI")
-              ──► builds the image ──► checks /health/live ──► switches traffic (no downtime)
-```
+The wait comes from the provider's response: Groq states it in its error message ("Please try again in 1m14.5s"), and the `Retry-After` header is the fallback. The provider's raw error text, which includes the account's organization ID, is written only to the server log. Short per-minute waits (up to 20 s) are retried automatically before the user sees anything.
 
-Run the same checks locally before pushing:
+## Testing and CI
 
 ```bash
-uv run ruff check .
-uv run pytest
+uv run ruff check .          # lint
+uv run pytest                # unit tests
 ```
 
-CI never needs documents, a database or API keys: the tests use made-up text and fakes.
+The tests use made-up text and fake services, so they need no documents, database or API keys. GitHub Actions runs the same checks on every pull request and on every push to `main`. It then builds the Docker image and checks that the container starts.
 
-## Endpoints
-
-| Path | Description |
-|---|---|
-| `GET /` | chat page (password-protected when `APP_PASSWORD` is set) |
-| `POST /api/chat` | `{"question", "history"}` → Server-Sent Events: `route`, `excerpts`, `token`, `done` / `error` |
-| `GET /health` | readiness: database, embeddings API and LLM API; 200 or 503 (public) |
-| `GET /health/live` | liveness: 200 as soon as the server runs (public; used by Railway) |
+```
+pull request   ──► CI: ruff · pytest · Docker build + start-up test
+merge to main  ──► CI on main ──► deployment waits for CI ──► build ──► /health/live ──► switch traffic
+```
 
 ## Evaluation
 
-Run by hand (they need the documents and, for judging, the local GPU):
+The evaluation set has **64 questions** covering all 33 documents of the corpus: 57 answerable (38 factual, 14 paraphrased, 5 terminology, one of them in Spanish) and 7 deliberately unanswerable. Each answerable question records the document and pages that contain the answer, plus other documents that also answer it where relevant. Only 14 questions are about the thesis itself, so the scores reflect the whole literature, not just one document. The evaluations need the documents, so they are run by hand:
 
 ```bash
-python evals/run_retrieval_eval.py --mode all
-python evals/run_answer_eval.py generate      # via the LLM API; paced by its rate limit
-python evals/run_answer_eval.py judge         # local judge model (Ollama)
+uv run python evals/run_retrieval_eval.py --mode all   # retrieval: hit@k, MRR
+uv run python evals/run_answer_eval.py generate        # answers via the LLM API
+uv run python evals/run_answer_eval.py judge           # scoring by a local LLM judge
 ```
 
-Baselines (35 answerable + 5 unanswerable questions):
+**Retrieval** (57 answerable questions, top 5 chunks, 33 documents / 2,279 chunks). A question counts as a hit at rank *r* when the *r*-th chunk comes from an expected document and page:
 
-| Retrieval (local GPU embeddings) | hit@1 | hit@3 | hit@5 | MRR |
+| Mode | hit@1 | hit@3 | hit@5 | MRR |
 |---|---|---|---|---|
-| hybrid | 57% | 91% | 97% | 0.72 |
-| vector | 63% | 83% | 91% | 0.74 |
-| keyword | 54% | 77% | 91% | 0.67 |
+| **hybrid, weighted RRF (used by the app)** | **53%** | **84%** | **91%** | **0.68** |
+| hybrid, equal-weight RRF (before tuning) | 47% | 77% | 88% | 0.63 |
+| vector only | 54% | 79% | 89% | 0.68 |
+| keyword only | 39% | 63% | 70% | 0.52 |
 
-| Answers (local qwen3.5:27b, prompt v1) | Result |
+With equal weights, hybrid search scored *below* vector-only search. The keyword ranking (`ts_rank_cd`) has no notion of how rare a word is, so chunks sharing common vocabulary with the question filled its list. Plain RRF also rewards agreement: a chunk ranked 10th in both lists outscores vector search's top hit when the keyword list misses that hit. Giving the keyword list half the weight of the vector list fixes this. The improvement holds on both the original and the newly added questions, and is stable for weights between 0.3 and 0.7. The scoring is strict: a chunk from another document that also states the fact, or a neighbouring page, counts as a miss. Question embeddings come from a hosted API whose vectors vary very slightly between calls, so repeated runs can differ by a question or two.
+
+**Answers** (all 64 questions, prompt v3, hybrid retrieval as above). Answers were generated with `qwen3.5:27b` on a local GPU, the open-weight counterpart of the Qwen model the deployed app calls through Groq, so evaluation runs cost no API quota. They were graded by `gemma4:26b`, a judge from a different model family, against the answer keys:
+
+| Metric | Result |
 |---|---|
-| Unanswerable questions correctly refused | 5 / 5 |
-| Judge: correct / partial / wrong | 32 / 2 / 1 (of 35) |
-| Faithful to the excerpts | 34 / 35 |
+| Unanswerable questions correctly refused | 7 / 7 |
+| Answerable questions falsely refused | 0 / 57 |
+| Judge verdict: correct / partial / wrong | 53 / 3 / 1 (of 57) |
+| Faithful to the retrieved excerpts | 56 / 57 |
+| Answers citing an expected page | 52 / 57 |
+| Answers with invalid or missing citations | 0 |
 
-Current runs (Cloudflare question embeddings, Groq `qwen/qwen3.8-27b`, prompt v3) are summarized in `evals/results/`.
+The only wrong answer (q21) follows a retrieval miss: the page with the answer was not among the 5 excerpts, and the model replied with related information that does not answer the question instead of refusing.
 
-## Cost
+Score summaries are kept in `evals/results/`. They contain only scores, never document text.
 
-Designed to run at **$0/month** for light use: Railway's free allowance with both services sleeping when idle, Groq's free tier (8,000 tokens/min, ~50 questions/day), and Cloudflare Workers AI's free daily allowance. Free tiers change; check each provider's pricing page.
+## Deployment
 
-## Project phases
+The app runs as two services on [Railway](https://railway.com/) in an EU region:
 
-| Phase | Topic | Status |
+| Service | Source | Notes |
 |---|---|---|
-| 0 | Repository, Git workflow | ✅ |
-| 1 | Ingestion and retrieval (parse, chunk, embed, pgvector, hybrid search) | ✅ |
-| 2 | Evaluation set (40 questions, retrieval metrics) | ✅ |
-| 3 | LLM: grounded answers with citations, answer evaluation with an LLM judge | ✅ |
-| 4 | API and UI: FastAPI, streaming, conversation memory, routing | ✅ |
-| 5 | Docker: image + Compose | ✅ |
-| 6 | CI: lint, unit tests, image build in GitHub Actions | ✅ |
-| 7 | Deployment: Railway, hosted LLM and embedding APIs, CD | ✅ |
-| 8 | Observability: logs, metrics, tracing of each answer | next |
+| `app` | this repository's `Dockerfile`, branch `main` | public HTTPS domain, password-protected; health check on `/health/live`; secrets set as platform variables |
+| `db` | `pgvector/pgvector:pg17` image with a persistent volume | reachable only over the platform's private network; SSL enabled |
+
+Both services sleep when idle and wake on the next request, so the first request after a pause takes a few seconds longer.
+
+**Updating the production database** after adding or changing documents:
+
+1. Run the ingestion pipeline locally (see [Adding documents](#adding-documents)).
+2. Temporarily enable a TCP proxy on the database service.
+3. In the terminal (not in `.env`), point `DATABASE_URL` at the proxy with `?sslmode=require` and run `uv run python ingestion/store.py`. The live app switches to the new data in one transaction.
+4. Unset `DATABASE_URL` in that terminal and **remove the TCP proxy**.
+
+Deploy code changes (for example new entries in `references.json`) before loading new documents into production.
+
+## Data, privacy and security
+
+- **Never committed:** the PDFs, everything under `data/`, `.env`, API keys, model weights and database dumps.
+- **Data flows:**
+
+  | Data | Goes to | Notes |
+  |---|---|---|
+  | The question | embeddings API | the provider states it does not train on inputs |
+  | Question, 5 retrieved excerpts, recent history | LLM API | provider configured with zero data retention |
+  | All chunks (text + vectors) | production database | private network only; opened briefly while loading data |
+  | PDFs, parsed text, evaluation runs, judge prompts | nowhere | stay on the local machine; the judge runs locally |
+
+- **Access control:** one shared password (HTTP Basic authentication over HTTPS), compared in constant time. Access to the live demo is given on request. Health checks are public and return no document content.
+- **Provider errors:** API error details (which can include account identifiers) are logged on the server and never shown to users.
+- **Untrusted text:** model output and document text are sanitized before display. Scripts, images, styles and forms are stripped from answers.
+- **Evaluation questions:** `evals/questions.jsonl` contains short facts from the thesis and the papers, published deliberately as the answer keys; the documents themselves are not included.
 
 ## Known limitations
 
-- Equations and tables are often garbled by PDF text extraction; the model is told not to reconstruct them.
-- Groq's free tier allows roughly 2 questions per minute; beyond that, users see a "rate limit reached" message.
-- The first request after the app has been idle takes a few seconds longer (app sleeping).
-- One shared password, no individual accounts.
+- PDF text extraction garbles many equations and tables; the model is instructed not to reconstruct them, and figures in tables can be missed.
+- Some cited works are not in the corpus (paywalled, or their PDF has no usable text layer), so the assistant cannot answer from them.
+- The free tiers allow only a few questions per minute and a limited number per day; beyond that, users see a notice with the waiting time.
+- The first request after an idle period is slower (sleeping services).
+- Access uses one shared password; there are no individual accounts.
+
+## License
+
+No license has been granted: all rights reserved. The thesis and the cited documents are not distributed with this repository. The vendored front-end libraries keep their own licenses: marked (MIT), KaTeX (MIT) and DOMPurify (Apache-2.0 / MPL-2.0).
+
+## Author
+
+**Jaume Manresa Rigo**, Master's thesis in Aerospace Engineering, Universidad Carlos III de Madrid.

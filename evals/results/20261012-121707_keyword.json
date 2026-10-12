@@ -1,0 +1,379 @@
+{
+  "mode": "keyword",
+  "overall": {
+    "n": 57,
+    "hit@1": 0.38596491228070173,
+    "hit@3": 0.631578947368421,
+    "hit@5": 0.7017543859649122,
+    "mrr": 0.5178362573099415
+  },
+  "by_type": {
+    "factual": {
+      "n": 38,
+      "hit@1": 0.42105263157894735,
+      "hit@3": 0.6578947368421053,
+      "hit@5": 0.7368421052631579,
+      "mrr": 0.5565789473684211
+    },
+    "paraphrase": {
+      "n": 14,
+      "hit@1": 0.2857142857142857,
+      "hit@3": 0.5714285714285714,
+      "hit@5": 0.6428571428571429,
+      "mrr": 0.4309523809523809
+    },
+    "term": {
+      "n": 5,
+      "hit@1": 0.4,
+      "hit@3": 0.6,
+      "hit@5": 0.6,
+      "mrr": 0.4666666666666667
+    }
+  },
+  "questions": [
+    {
+      "id": "q01",
+      "type": "term",
+      "rank": null,
+      "top1": "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf p.5,6"
+    },
+    {
+      "id": "q02",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.16"
+    },
+    {
+      "id": "q03",
+      "type": "paraphrase",
+      "rank": null,
+      "top1": "Neftci2019_Surrogate_gradient_learning.pdf p.1"
+    },
+    {
+      "id": "q04",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.31"
+    },
+    {
+      "id": "q05",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.39,40"
+    },
+    {
+      "id": "q06",
+      "type": "paraphrase",
+      "rank": 3,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.54,55"
+    },
+    {
+      "id": "q07",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Loshchilov2019_AdamW.pdf p.6"
+    },
+    {
+      "id": "q08",
+      "type": "term",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.70,71"
+    },
+    {
+      "id": "q09",
+      "type": "factual",
+      "rank": 2,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.20,21"
+    },
+    {
+      "id": "q10",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.79,80"
+    },
+    {
+      "id": "q11",
+      "type": "factual",
+      "rank": 2,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.89"
+    },
+    {
+      "id": "q12",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.85,86"
+    },
+    {
+      "id": "q13",
+      "type": "factual",
+      "rank": 2,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.62"
+    },
+    {
+      "id": "q14",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.110"
+    },
+    {
+      "id": "q15",
+      "type": "paraphrase",
+      "rank": 5,
+      "top1": "Zhao2023_Inverse_kinematics_neuromorphic.pdf p.10"
+    },
+    {
+      "id": "q16",
+      "type": "factual",
+      "rank": null,
+      "top1": "Deep learning in spiking neural networks.pdf p.57,58"
+    },
+    {
+      "id": "q17",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Review - SNN Models.pdf p.34,35"
+    },
+    {
+      "id": "q18",
+      "type": "paraphrase",
+      "rank": null,
+      "top1": "Deep learning in spiking neural networks.pdf p.58"
+    },
+    {
+      "id": "q19",
+      "type": "factual",
+      "rank": null,
+      "top1": "Zhao2023_Inverse_kinematics_neuromorphic.pdf p.8"
+    },
+    {
+      "id": "q20",
+      "type": "paraphrase",
+      "rank": 2,
+      "top1": "Rueckauer2017_ANN_to_SNN_conversion.pdf p.2"
+    },
+    {
+      "id": "q21",
+      "type": "factual",
+      "rank": null,
+      "top1": "Deep learning in spiking neural networks.pdf p.57,58"
+    },
+    {
+      "id": "q22",
+      "type": "factual",
+      "rank": 4,
+      "top1": "Deep learning in spiking neural networks.pdf p.57,58"
+    },
+    {
+      "id": "q23",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Unsupervised_learning_of_digitrecognitionusingspike.pdf p.3"
+    },
+    {
+      "id": "q24",
+      "type": "paraphrase",
+      "rank": 2,
+      "top1": "Zhao2023_Inverse_kinematics_neuromorphic.pdf p.10"
+    },
+    {
+      "id": "q25",
+      "type": "term",
+      "rank": 1,
+      "top1": "tcas04.pdf p.1"
+    },
+    {
+      "id": "q26",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NeuSpike.pdf p.1"
+    },
+    {
+      "id": "q27",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Deep learning in spiking neural networks.pdf p.58"
+    },
+    {
+      "id": "q28",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Grasping extreme aerodynamics on a low dimensional manifold.pdf p.5"
+    },
+    {
+      "id": "q29",
+      "type": "paraphrase",
+      "rank": null,
+      "top1": "EASA2023_AI_Roadmap_2.0.pdf p.14"
+    },
+    {
+      "id": "q30",
+      "type": "factual",
+      "rank": 5,
+      "top1": "Deep learning in spiking neural networks.pdf p.58"
+    },
+    {
+      "id": "q31",
+      "type": "factual",
+      "rank": 1,
+      "top1": "JFM2024a.pdf p.1"
+    },
+    {
+      "id": "q32",
+      "type": "factual",
+      "rank": 1,
+      "top1": "POF_2021.pdf p.2"
+    },
+    {
+      "id": "q33",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Extreme vortex-gust airfoil interactions at Re 5000.pdf p.1"
+    },
+    {
+      "id": "q34",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Fluid Dynamics and Machine Learning (Brunton).pdf p.478,479"
+    },
+    {
+      "id": "q35",
+      "type": "factual",
+      "rank": null,
+      "top1": "PinBall.pdf p.13,14"
+    },
+    {
+      "id": "q41",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Izhikevich2003_Simple_model_spiking_neurons.pdf p.1"
+    },
+    {
+      "id": "q42",
+      "type": "term",
+      "rank": null,
+      "top1": "Izhikevich2003_Simple_model_spiking_neurons.pdf p.1"
+    },
+    {
+      "id": "q43",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Loshchilov2019_AdamW.pdf p.1,2"
+    },
+    {
+      "id": "q44",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Fluid Dynamics and Machine Learning (Brunton).pdf p.486,487"
+    },
+    {
+      "id": "q45",
+      "type": "term",
+      "rank": 3,
+      "top1": "Goodfellow2014_GAN.pdf p.7"
+    },
+    {
+      "id": "q46",
+      "type": "factual",
+      "rank": null,
+      "top1": "Review - SNN Models.pdf p.43,44"
+    },
+    {
+      "id": "q47",
+      "type": "paraphrase",
+      "rank": null,
+      "top1": "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf p.19"
+    },
+    {
+      "id": "q48",
+      "type": "factual",
+      "rank": null,
+      "top1": "Deep learning in spiking neural networks.pdf p.58"
+    },
+    {
+      "id": "q49",
+      "type": "factual",
+      "rank": 2,
+      "top1": "NVIDIA2021_Ampere_GA102_whitepaper.pdf p.19,20"
+    },
+    {
+      "id": "q50",
+      "type": "paraphrase",
+      "rank": null,
+      "top1": "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf p.16"
+    },
+    {
+      "id": "q51",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Deep learning in spiking neural networks.pdf p.57,58"
+    },
+    {
+      "id": "q52",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Paulun2018_Retinotopic_SNN_NeuCube.pdf p.4,5"
+    },
+    {
+      "id": "q53",
+      "type": "factual",
+      "rank": null,
+      "top1": "Deep learning in spiking neural networks.pdf p.57,58"
+    },
+    {
+      "id": "q54",
+      "type": "factual",
+      "rank": 5,
+      "top1": "Fukami2024_Transient_lift_attenuation.pdf p.13,14"
+    },
+    {
+      "id": "q55",
+      "type": "paraphrase",
+      "rank": 2,
+      "top1": "Taira2017_Modal_analysis_overview.pdf p.16"
+    },
+    {
+      "id": "q56",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Murata2020_Nonlinear_mode_decomposition_CNN.pdf p.8,9"
+    },
+    {
+      "id": "q57",
+      "type": "factual",
+      "rank": null,
+      "top1": "Pfeiffer2018_Deep_learning_spiking_neurons.pdf p.12"
+    },
+    {
+      "id": "q58",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NVIDIA2021_Ampere_GA102_whitepaper.pdf p.5,6,7"
+    },
+    {
+      "id": "q59",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NVIDIA2021_Ampere_GA102_whitepaper.pdf p.5"
+    },
+    {
+      "id": "q60",
+      "type": "factual",
+      "rank": 1,
+      "top1": "EU2023_Regulation_2023-203_Information_security.pdf p.7,8"
+    },
+    {
+      "id": "q61",
+      "type": "factual",
+      "rank": null,
+      "top1": "EASA2023_AI_Roadmap_2.0.pdf p.17,18"
+    },
+    {
+      "id": "q62",
+      "type": "factual",
+      "rank": null,
+      "top1": "BOE1996_Ley_Propiedad_Intelectual.pdf p.4"
+    }
+  ],
+  "seconds": 1.7,
+  "embedding_model": "Qwen/Qwen3-Embedding-0.6B"
+}

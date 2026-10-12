@@ -1,0 +1,379 @@
+{
+  "mode": "hybrid",
+  "overall": {
+    "n": 57,
+    "hit@1": 0.5263157894736842,
+    "hit@3": 0.8421052631578947,
+    "hit@5": 0.9122807017543859,
+    "mrr": 0.6786549707602338
+  },
+  "by_type": {
+    "factual": {
+      "n": 38,
+      "hit@1": 0.5,
+      "hit@3": 0.8421052631578947,
+      "hit@5": 0.868421052631579,
+      "mrr": 0.6557017543859649
+    },
+    "paraphrase": {
+      "n": 14,
+      "hit@1": 0.5,
+      "hit@3": 0.7857142857142857,
+      "hit@5": 1.0,
+      "mrr": 0.661904761904762
+    },
+    "term": {
+      "n": 5,
+      "hit@1": 0.8,
+      "hit@3": 1.0,
+      "hit@5": 1.0,
+      "mrr": 0.9
+    }
+  },
+  "questions": [
+    {
+      "id": "q01",
+      "type": "term",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.14,15"
+    },
+    {
+      "id": "q02",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.16"
+    },
+    {
+      "id": "q03",
+      "type": "paraphrase",
+      "rank": 5,
+      "top1": "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf p.16"
+    },
+    {
+      "id": "q04",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Extreme vortex-gust airfoil interactions at Re 5000.pdf p.3"
+    },
+    {
+      "id": "q05",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.39,40"
+    },
+    {
+      "id": "q06",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.52"
+    },
+    {
+      "id": "q07",
+      "type": "factual",
+      "rank": null,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.55,56,57"
+    },
+    {
+      "id": "q08",
+      "type": "term",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.70,71"
+    },
+    {
+      "id": "q09",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.77,78"
+    },
+    {
+      "id": "q10",
+      "type": "factual",
+      "rank": 3,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.55,56,57"
+    },
+    {
+      "id": "q11",
+      "type": "factual",
+      "rank": 3,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.89"
+    },
+    {
+      "id": "q12",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.85,86"
+    },
+    {
+      "id": "q13",
+      "type": "factual",
+      "rank": 1,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.62,63"
+    },
+    {
+      "id": "q14",
+      "type": "factual",
+      "rank": 2,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.108,109"
+    },
+    {
+      "id": "q15",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Review - SNN Models.pdf p.12"
+    },
+    {
+      "id": "q16",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Review - SNN Models.pdf p.27,28"
+    },
+    {
+      "id": "q17",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Review - SNN Models.pdf p.38"
+    },
+    {
+      "id": "q18",
+      "type": "paraphrase",
+      "rank": 3,
+      "top1": "Paulun2018_Retinotopic_SNN_NeuCube.pdf p.7"
+    },
+    {
+      "id": "q19",
+      "type": "factual",
+      "rank": null,
+      "top1": "Viale2021_CarSNN.pdf p.9"
+    },
+    {
+      "id": "q20",
+      "type": "paraphrase",
+      "rank": 2,
+      "top1": "Pfeiffer2018_Deep_learning_spiking_neurons.pdf p.9"
+    },
+    {
+      "id": "q21",
+      "type": "factual",
+      "rank": null,
+      "top1": "Rueckauer2017_ANN_to_SNN_conversion.pdf p.2"
+    },
+    {
+      "id": "q22",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Unsupervised_learning_of_digitrecognitionusingspike.pdf p.5"
+    },
+    {
+      "id": "q23",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Unsupervised_learning_of_digitrecognitionusingspike.pdf p.3"
+    },
+    {
+      "id": "q24",
+      "type": "paraphrase",
+      "rank": 2,
+      "top1": "Unsupervised_learning_of_digitrecognitionusingspike.pdf p.7"
+    },
+    {
+      "id": "q25",
+      "type": "term",
+      "rank": 1,
+      "top1": "tcas04.pdf p.1"
+    },
+    {
+      "id": "q26",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NeuSpike.pdf p.1"
+    },
+    {
+      "id": "q27",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NeuSpike.pdf p.1"
+    },
+    {
+      "id": "q28",
+      "type": "factual",
+      "rank": 3,
+      "top1": "Extreme vortex-gust airfoil interactions at Re 5000.pdf p.15,16"
+    },
+    {
+      "id": "q29",
+      "type": "paraphrase",
+      "rank": 3,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.2"
+    },
+    {
+      "id": "q30",
+      "type": "factual",
+      "rank": 2,
+      "top1": "JFM_2021a.pdf p.28,29"
+    },
+    {
+      "id": "q31",
+      "type": "factual",
+      "rank": 1,
+      "top1": "JFM2024a.pdf p.1"
+    },
+    {
+      "id": "q32",
+      "type": "factual",
+      "rank": 2,
+      "top1": "POF_2021.pdf p.8"
+    },
+    {
+      "id": "q33",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Extreme vortex-gust airfoil interactions at Re 5000.pdf p.1"
+    },
+    {
+      "id": "q34",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Fluid Dynamics and Machine Learning (Brunton).pdf p.478,479"
+    },
+    {
+      "id": "q35",
+      "type": "factual",
+      "rank": 1,
+      "top1": "PinBall.pdf p.1"
+    },
+    {
+      "id": "q41",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Izhikevich2003_Simple_model_spiking_neurons.pdf p.1"
+    },
+    {
+      "id": "q42",
+      "type": "term",
+      "rank": 2,
+      "top1": "Izhikevich2003_Simple_model_spiking_neurons.pdf p.1"
+    },
+    {
+      "id": "q43",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Loshchilov2019_AdamW.pdf p.1,2"
+    },
+    {
+      "id": "q44",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Goodfellow2014_GAN.pdf p.3,4"
+    },
+    {
+      "id": "q45",
+      "type": "term",
+      "rank": 1,
+      "top1": "Goodfellow2014_GAN.pdf p.3,4"
+    },
+    {
+      "id": "q46",
+      "type": "factual",
+      "rank": 3,
+      "top1": "Viale2021_CarSNN.pdf p.10"
+    },
+    {
+      "id": "q47",
+      "type": "paraphrase",
+      "rank": 5,
+      "top1": "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf p.19"
+    },
+    {
+      "id": "q48",
+      "type": "factual",
+      "rank": null,
+      "top1": "Rueckauer2017_ANN_to_SNN_conversion.pdf p.2"
+    },
+    {
+      "id": "q49",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Pfeiffer2018_Deep_learning_spiking_neurons.pdf p.10"
+    },
+    {
+      "id": "q50",
+      "type": "paraphrase",
+      "rank": 5,
+      "top1": "TFM_Jaume_Manresa_Rigo.pdf p.21,22"
+    },
+    {
+      "id": "q51",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Davies2021_Loihi_survey.pdf p.8"
+    },
+    {
+      "id": "q52",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Paulun2018_Retinotopic_SNN_NeuCube.pdf p.3,4"
+    },
+    {
+      "id": "q53",
+      "type": "factual",
+      "rank": 3,
+      "top1": "Davies2021_Loihi_survey.pdf p.16"
+    },
+    {
+      "id": "q54",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Fukami2024_Transient_lift_attenuation.pdf p.13,14"
+    },
+    {
+      "id": "q55",
+      "type": "paraphrase",
+      "rank": 1,
+      "top1": "Taira2017_Modal_analysis_overview.pdf p.12"
+    },
+    {
+      "id": "q56",
+      "type": "factual",
+      "rank": 1,
+      "top1": "Murata2020_Nonlinear_mode_decomposition_CNN.pdf p.7,8"
+    },
+    {
+      "id": "q57",
+      "type": "factual",
+      "rank": 2,
+      "top1": "Murata2020_Nonlinear_mode_decomposition_CNN.pdf p.2"
+    },
+    {
+      "id": "q58",
+      "type": "factual",
+      "rank": 1,
+      "top1": "NVIDIA2021_Ampere_GA102_whitepaper.pdf p.5,6,7"
+    },
+    {
+      "id": "q59",
+      "type": "factual",
+      "rank": 2,
+      "top1": "NVIDIA2021_Ampere_GA102_whitepaper.pdf p.44"
+    },
+    {
+      "id": "q60",
+      "type": "factual",
+      "rank": null,
+      "top1": "EU2023_Regulation_2023-203_Information_security.pdf p.1"
+    },
+    {
+      "id": "q61",
+      "type": "factual",
+      "rank": 2,
+      "top1": "EASA2023_AI_Roadmap_2.0.pdf p.25,26"
+    },
+    {
+      "id": "q62",
+      "type": "factual",
+      "rank": 4,
+      "top1": "BOE1996_Ley_Propiedad_Intelectual.pdf p.93"
+    }
+  ],
+  "seconds": 99.4,
+  "embedding_model": "Qwen/Qwen3-Embedding-0.6B"
+}

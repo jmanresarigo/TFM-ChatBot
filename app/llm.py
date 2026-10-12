@@ -78,7 +78,52 @@ CITATION = re.compile(r"\s*\[\d+\]")
 class LLMError(Exception):
     """API unreachable, key rejected, model missing, rate limit exhausted, or
     another error from the provider. Raised instead of SystemExit so the web
-    server keeps running."""
+    server keeps running.
+
+    The message is meant for the user. `usage_limit` marks the provider's
+    free-tier limit being reached, `retry_after` is how many seconds to wait
+    then (None if unknown), and `detail` is the provider's own error text, for
+    the server log only: Groq's includes the account's organization ID."""
+
+    def __init__(self, message: str, usage_limit: bool = False, retry_after: float | None = None, detail: str = ""):
+        super().__init__(message)
+        self.usage_limit = usage_limit
+        self.retry_after = retry_after
+        self.detail = detail
+
+
+# The limits named in Groq's 429 messages, e.g. "... on tokens per minute (TPM):
+# Limit 8000, Used 7500, Requested 900. Please try again in 3.2s."
+LIMIT_KINDS = {
+    "TPM": "tokens per minute",
+    "RPM": "requests per minute",
+    "TPD": "tokens per day",
+    "RPD": "requests per day",
+}
+UNIT_SECONDS = {"h": 3600, "m": 60, "s": 1, "ms": 0.001}
+
+
+def parse_wait(text: str) -> float | None:
+    """Seconds in "try again in 7.66s" / "1m26.4s" / "2h31m12s" / "560ms"."""
+    match = re.search(r"try again in\s+((?:[\d.]+(?:ms|h|m|s))+)", text)
+    if not match:
+        return None
+    return sum(float(v) * UNIT_SECONDS[u] for v, u in re.findall(r"([\d.]+)(ms|h|m|s)", match.group(1)))
+
+
+def rate_limit_error(response: httpx.Response, detail: str) -> LLMError:
+    """The user-facing error for a 429: which limit, and how long to wait."""
+    wait = parse_wait(detail)
+    if wait is None:
+        try:
+            wait = float(response.headers["retry-after"])
+        except (KeyError, ValueError):
+            wait = None
+    kind = next((name for code, name in LIMIT_KINDS.items() if f"({code})" in detail), None)
+    reached = f"its limit of {kind}" if kind else "its usage limit"
+    message = f"The AI model behind this demo (free tier) has reached {reached}."
+    message += f" Please wait {retrieval.describe_wait(wait)} and ask again." if wait else " Please try again later."
+    return LLMError(message, usage_limit=True, retry_after=wait, detail=detail)
 
 
 @dataclass(frozen=True)
@@ -238,7 +283,7 @@ def _error(endpoint: Endpoint, response: httpx.Response) -> LLMError:
     if response.status_code == 404:
         return LLMError(f"Model '{endpoint.model}' not found at {endpoint.base_url}: {detail}")
     if response.status_code == 429:
-        return LLMError(f"Rate limit reached for '{endpoint.model}' (free tier). Try again in a minute. {detail}")
+        return rate_limit_error(response, detail)
     return LLMError(f"LLM API returned {response.status_code}: {detail}")
 
 
