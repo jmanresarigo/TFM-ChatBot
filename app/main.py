@@ -17,7 +17,7 @@ forgetting it. This keeps the server simple, and any number of server copies
 can answer any request (useful once it is deployed).
 
 Run from the project root:
-    uvicorn main:app --app-dir app --reload
+    uvicorn main:app --app-dir app --reload --port 8080
 then open http://127.0.0.1:8000
 """
 
