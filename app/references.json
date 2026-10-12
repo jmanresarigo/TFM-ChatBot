@@ -1,0 +1,138 @@
+{
+  "_comment": "IEEE reference for each document in the database, keyed by its PDF file name (the chunks' source). *text* is shown in italics. Entries for cited works are copied from the thesis bibliography.",
+  "TFM_Jaume_Manresa_Rigo.pdf": {
+    "text": "J. Manresa Rigo, “Spiking neural networks for lift coefficient reconstruction in extreme vortex-gust airfoil interactions,” M.S. thesis, Universidad Carlos III de Madrid, Leganés, Spain, 2026."
+  },
+  "Grasping extreme aerodynamics on a low dimensional manifold.pdf": {
+    "text": "K. Fukami and K. Taira, “Grasping extreme aerodynamics on a low-dimensional manifold,” *Nature Communications*, vol. 14, p. 6480, 2023.",
+    "url": "https://doi.org/10.1038/s41467-023-42213-6"
+  },
+  "Fluid Dynamics and Machine Learning (Brunton).pdf": {
+    "text": "S. L. Brunton, B. R. Noack, and P. Koumoutsakos, “Machine learning for fluid mechanics,” *Annual Review of Fluid Mechanics*, vol. 52, pp. 477–508, 2020.",
+    "url": "https://doi.org/10.1146/annurev-fluid-010719-060214"
+  },
+  "Deep learning in spiking neural networks.pdf": {
+    "text": "A. Tavanaei, M. Ghodrati, S. R. Kheradpisheh, T. Masquelier, and A. Maida, “Deep learning in spiking neural networks,” *Neural Networks*, vol. 111, pp. 47–63, 2019.",
+    "url": "https://doi.org/10.1016/j.neunet.2018.12.002"
+  },
+  "Spiking_Neural_Networks_A_Survey.pdf": {
+    "text": "J. D. Nunes, M. Carvalho, D. Carneiro, and J. S. Cardoso, “Spiking neural networks: A survey,” *IEEE Access*, vol. 10, pp. 60738–60764, 2022.",
+    "url": "https://doi.org/10.1109/ACCESS.2022.3179968"
+  },
+  "Extreme vortex-gust airfoil interactions at Re 5000.pdf": {
+    "text": "K. Fukami, L. Smith, and K. Taira, “Extreme vortex-gust airfoil interactions at Reynolds number 5000,” *Physical Review Fluids*, vol. 10, no. 8, p. 084703, 2025.",
+    "url": "https://doi.org/10.1103/vcbd-tvz1"
+  },
+  "JFM_2021a.pdf": {
+    "text": "L. Guastoni et al., “Convolutional-network models to predict wall-bounded turbulence from wall quantities,” *Journal of Fluid Mechanics*, vol. 928, A27, 2021.",
+    "url": "https://doi.org/10.1017/jfm.2021.812"
+  },
+  "POF_2021.pdf": {
+    "text": "A. Güemes, S. Discetti, A. Ianiro, B. Sirmacek, H. Azizpour, and R. Vinuesa, “From coarse wall measurements to turbulent velocity fields through deep learning,” *Physics of Fluids*, vol. 33, no. 7, p. 075121, 2021.",
+    "url": "https://doi.org/10.1063/5.0058346"
+  },
+  "JFM2024a.pdf": {
+    "text": "A. Cuéllar, A. Güemes, A. Ianiro, Ó. Flores, R. Vinuesa, and S. Discetti, “Three-dimensional generative adversarial networks for turbulent flow estimation from wall measurements,” *Journal of Fluid Mechanics*, vol. 991, A1, 2024.",
+    "url": "https://doi.org/10.1017/jfm.2024.432"
+  },
+  "NeuSpike.pdf": {
+    "text": "L. Zhu, J. Li, X. Wang, T. Huang, and Y. Tian, “NeuSpike-Net: High speed video reconstruction via bio-inspired neuromorphic cameras,” in *Proceedings of the IEEE/CVF International Conference on Computer Vision*, 2021, pp. 2400–2409.",
+    "url": "https://openaccess.thecvf.com/content/ICCV2021/html/Zhu_NeuSpike-Net_High_Speed_Video_Reconstruction_via_Bio-Inspired_Neuromorphic_Cameras_ICCV_2021_paper.html"
+  },
+  "Unsupervised_learning_of_digitrecognitionusingspike.pdf": {
+    "text": "P. U. Diehl and M. Cook, “Unsupervised learning of digit recognition using spike-timing-dependent plasticity,” *Frontiers in Computational Neuroscience*, vol. 9, p. 99, 2015.",
+    "url": "https://doi.org/10.3389/fncom.2015.00099"
+  },
+  "PinBall.pdf": {
+    "text": "N. Deng, B. R. Noack, M. Morzyński, and L. R. Pastur, “Low-order model for successive bifurcations of the fluidic pinball,” *Journal of Fluid Mechanics*, vol. 884, A37, 2020.",
+    "url": "https://doi.org/10.1017/jfm.2019.959"
+  },
+  "Review - SNN Models.pdf": {
+    "text": "B. Ayasi, C. J. Carmona, M. Saleh, and A. M. García-Vico, “A practical tutorial on spiking neural networks: Comprehensive review, models, experiments, software tools, and implementation guidelines,” *Eng*, vol. 6, no. 11, p. 304, 2025.",
+    "url": "https://doi.org/10.3390/eng6110304"
+  },
+  "tcas04.pdf": {
+    "text": "A. A. Lazar and L. T. Tóth, “Perfect recovery and sensitivity analysis of time encoded bandlimited signals,” *IEEE Transactions on Circuits and Systems I: Regular Papers*, vol. 51, no. 10, pp. 2060–2073, 2004.",
+    "url": "https://doi.org/10.1109/TCSI.2004.835026"
+  },
+  "Paulun2018_Retinotopic_SNN_NeuCube.pdf": {
+    "text": "L. Paulun, A. Wendt, and N. Kasabov, “A retinotopic spiking neural network system for accurate recognition of moving objects using NeuCube and dynamic vision sensors,” *Frontiers in Computational Neuroscience*, vol. 12, p. 42, 2018.",
+    "url": "https://doi.org/10.3389/fncom.2018.00042"
+  },
+  "Davies2021_Loihi_survey.pdf": {
+    "text": "M. Davies et al., “Advancing neuromorphic computing with Loihi: A survey of results and outlook,” *Proceedings of the IEEE*, vol. 109, no. 5, pp. 911–934, 2021.",
+    "url": "https://doi.org/10.1109/JPROC.2021.3067593"
+  },
+  "Zhao2023_Inverse_kinematics_neuromorphic.pdf": {
+    "text": "J. Zhao, M. Monforte, G. Indiveri, C. Bartolozzi, and E. Donati, “Learning inverse kinematics using neural computational primitives on neuromorphic hardware,” *npj Robotics*, vol. 1, p. 1, 2023.",
+    "url": "https://doi.org/10.1038/s44182-023-00001-w"
+  },
+  "Fukami2024_Transient_lift_attenuation.pdf": {
+    "text": "K. Fukami, H. Nakao, and K. Taira, “Data-driven transient lift attenuation for extreme vortex gust-airfoil interactions,” *Journal of Fluid Mechanics*, vol. 992, A17, 2024.",
+    "url": "https://doi.org/10.1017/jfm.2024.592"
+  },
+  "Goodfellow2014_GAN.pdf": {
+    "text": "I. J. Goodfellow et al., “Generative adversarial nets,” in *Advances in Neural Information Processing Systems*, vol. 27, Curran Associates, Inc., 2014, pp. 2672–2680.",
+    "url": "https://papers.nips.cc/paper/5423-generative-adversarial-nets"
+  },
+  "Taira2017_Modal_analysis_overview.pdf": {
+    "text": "K. Taira et al., “Modal analysis of fluid flows: An overview,” *AIAA Journal*, vol. 55, no. 12, pp. 4013–4041, 2017.",
+    "url": "https://doi.org/10.2514/1.J056060"
+  },
+  "Hinton2006_Reducing_dimensionality.pdf": {
+    "text": "G. E. Hinton and R. R. Salakhutdinov, “Reducing the dimensionality of data with neural networks,” *Science*, vol. 313, no. 5786, pp. 504–507, 2006.",
+    "url": "https://doi.org/10.1126/science.1127647"
+  },
+  "Murata2020_Nonlinear_mode_decomposition_CNN.pdf": {
+    "text": "T. Murata, K. Fukami, and K. Fukagata, “Nonlinear mode decomposition with convolutional neural networks for fluid dynamics,” *Journal of Fluid Mechanics*, vol. 882, A13, 2020.",
+    "url": "https://doi.org/10.1017/jfm.2019.822"
+  },
+  "Fukami2020_Hierarchical_autoencoder.pdf": {
+    "text": "K. Fukami, T. Nakamura, and K. Fukagata, “Convolutional neural network based hierarchical autoencoder for nonlinear mode decomposition of fluid field data,” *Physics of Fluids*, vol. 32, no. 9, p. 095110, 2020.",
+    "url": "https://doi.org/10.1063/5.0020721"
+  },
+  "Viale2021_CarSNN.pdf": {
+    "text": "A. Viale, A. Marchisio, M. Martina, G. Masera, and M. Shafique, “CarSNN: An efficient spiking neural network for event-based autonomous cars on the Loihi neuromorphic research processor,” in *2021 International Joint Conference on Neural Networks (IJCNN)*, 2021, pp. 1–8.",
+    "url": "https://doi.org/10.1109/IJCNN52387.2021.9533738"
+  },
+  "Pfeiffer2018_Deep_learning_spiking_neurons.pdf": {
+    "text": "M. Pfeiffer and T. Pfeil, “Deep learning with spiking neurons: Opportunities and challenges,” *Frontiers in Neuroscience*, vol. 12, p. 774, 2018.",
+    "url": "https://doi.org/10.3389/fnins.2018.00774"
+  },
+  "Izhikevich2003_Simple_model_spiking_neurons.pdf": {
+    "text": "E. M. Izhikevich, “Simple model of spiking neurons,” *IEEE Transactions on Neural Networks*, vol. 14, no. 6, pp. 1569–1572, 2003.",
+    "url": "https://doi.org/10.1109/TNN.2003.820440"
+  },
+  "Eshraghian2023_Training_SNNs_lessons_deep_learning.pdf": {
+    "text": "J. K. Eshraghian et al., “Training spiking neural networks using lessons from deep learning,” *Proceedings of the IEEE*, vol. 111, no. 9, pp. 1016–1054, 2023.",
+    "url": "https://doi.org/10.1109/JPROC.2023.3308088"
+  },
+  "Neftci2019_Surrogate_gradient_learning.pdf": {
+    "text": "E. O. Neftci, H. Mostafa, and F. Zenke, “Surrogate gradient learning in spiking neural networks: Bringing the power of gradient-based optimization to spiking neural networks,” *IEEE Signal Processing Magazine*, vol. 36, no. 6, pp. 51–63, 2019.",
+    "url": "https://doi.org/10.1109/MSP.2019.2931595"
+  },
+  "Rueckauer2017_ANN_to_SNN_conversion.pdf": {
+    "text": "B. Rueckauer, I.-A. Lungu, Y. Hu, M. Pfeiffer, and S.-C. Liu, “Conversion of continuous-valued deep networks to efficient event-driven networks for image classification,” *Frontiers in Neuroscience*, vol. 11, p. 682, 2017.",
+    "url": "https://doi.org/10.3389/fnins.2017.00682"
+  },
+  "Loshchilov2019_AdamW.pdf": {
+    "text": "I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” in *International Conference on Learning Representations*, 2019.",
+    "url": "https://openreview.net/forum?id=Bkg6RiCqY7"
+  },
+  "EASA2023_AI_Roadmap_2.0.pdf": {
+    "text": "European Union Aviation Safety Agency, *Artificial intelligence roadmap 2.0: A human-centric approach to AI in aviation*, 2023.",
+    "url": "https://www.easa.europa.eu/en/downloads/137919/en"
+  },
+  "EU2023_Regulation_2023-203_Information_security.pdf": {
+    "text": "European Commission, *Commission implementing regulation (EU) 2023/203 on the management of information security risks with a potential impact on aviation safety*, Official Journal of the European Union, 2023.",
+    "url": "https://eur-lex.europa.eu/eli/reg_impl/2023/203/oj"
+  },
+  "BOE1996_Ley_Propiedad_Intelectual.pdf": {
+    "text": "Jefatura del Estado, *Real Decreto Legislativo 1/1996 por el que se aprueba el texto refundido de la Ley de Propiedad Intelectual*, Boletín Oficial del Estado, 1996.",
+    "url": "https://www.boe.es/eli/es/rdlg/1996/04/12/1/con"
+  },
+  "NVIDIA2021_Ampere_GA102_whitepaper.pdf": {
+    "text": "NVIDIA Corporation, *NVIDIA Ampere GA102 GPU architecture*, GeForce RTX 3090 total graphics power: 350 W, 2021.",
+    "url": "https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf"
+  }
+}

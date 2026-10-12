@@ -2,6 +2,8 @@
 work on strings and on pages as {"blocks": [[line, ...], ...]} dicts."""
 
 from parse import (
+    FIRST_REFERENCE,
+    REFERENCES_HEADING,
     clean_label,
     find_repeated_lines,
     fix_characters,
@@ -85,6 +87,20 @@ def test_content_blocks_need_letters():
     assert not is_content_block("0.0 0.5 1.0")  # axis ticks
     assert not is_content_block("12")  # page number
     assert not is_content_block("xii")  # roman page number
+
+
+def test_references_heading_variants():
+    for heading in ["References", "BIBLIOGRAPHY", "R E F E R E N C E S", "LITERATURE CITED"]:
+        assert REFERENCES_HEADING.match(heading), heading
+    assert not REFERENCES_HEADING.match("References to earlier work show that")
+
+
+def test_unheaded_reference_list_starts_at_first_entry():
+    # Physical Review papers print no heading before "[1] A. R. Jones, ..."
+    assert FIRST_REFERENCE.match("[1] A. R. Jones, O. Cetiner, and M. J. Smith, Physics")
+    assert FIRST_REFERENCE.match("[1] I.-A. Lungu and Y. Hu, Conversion")
+    assert not FIRST_REFERENCE.match("[1] shows that the lift peak depends on circulation")
+    assert not FIRST_REFERENCE.match("[2] A. R. Jones, a later entry")
 
 
 # --- joining lines -----------------------------------------------------------------

@@ -6,6 +6,7 @@ model) is skipped."""
 
 import base64
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -80,10 +81,20 @@ def test_chat_streams_excerpts_tokens_then_done(fake_rag):
     names = [name for name, _ in stream]
     assert names == ["excerpts", "token", "token", "done"]  # no history: no route event
     assert stream[0][1][0]["source"] == "thesis.pdf"
+    assert stream[0][1][0]["reference"] == {"text": "thesis.pdf"}  # no entry: the file name
     done = stream[-1][1]
     assert done["cited"] == [1]
     assert done["invalid_citations"] == []
     assert done["context"]["used"] == 1000
+
+
+def test_every_reference_has_text_and_a_valid_link():
+    assert main.REFERENCES  # the file loaded, without its "_comment"
+    for source, entry in main.REFERENCES.items():
+        assert source.endswith(".pdf")
+        assert entry["text"].strip()
+        assert set(entry) <= {"text", "url"}
+        assert entry.get("url", "https://").startswith("https://")
 
 
 def test_conversation_question_skips_retrieval(fake_rag, monkeypatch):
@@ -147,6 +158,14 @@ def test_index_serves_the_chat_page():
     response = client.get("/")
     assert response.status_code == 200
     assert "<title>TFM Chatbot</title>" in response.text
+
+
+def test_every_script_and_style_the_page_loads_is_served():
+    page = client.get("/").text
+    assets = re.findall(r'(?:src|href)="(/static/[^"]+)"', page)
+    assert len(assets) >= 4  # Markdown, sanitizer, math (script + style)
+    for path in assets:
+        assert client.get(path).status_code == 200, path
 
 
 # --- password protection ------------------------------------------------------------
