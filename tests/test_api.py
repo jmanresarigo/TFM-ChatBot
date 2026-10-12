@@ -116,7 +116,27 @@ def test_failures_become_error_events(monkeypatch):
 
     monkeypatch.setattr(retrieval, "search", broken_search)
     stream = events(client.post("/api/chat", json={"question": "Anything?"}))
-    assert stream == [("error", {"message": "Search failed: database is down"})]
+    assert stream == [("error", {"message": "Search failed: database is down", "usage_limit": False, "retry_after": None})]
+
+
+def test_usage_limit_errors_tell_the_page_how_long_to_wait(monkeypatch):
+    def limited_search(q, top_k=5):
+        raise retrieval.RetrievalError("The search service has reached its usage limit.", usage_limit=True, retry_after=42)
+
+    monkeypatch.setattr(retrieval, "search", limited_search)
+    stream = events(client.post("/api/chat", json={"question": "Anything?"}))
+    assert stream == [("error", {"message": "The search service has reached its usage limit.", "usage_limit": True, "retry_after": 42})]
+
+
+def test_llm_usage_limit_hides_the_provider_detail(fake_rag, monkeypatch):
+    def limited(messages, stats, **kwargs):
+        raise llm.LLMError("The AI model has reached its limit.", usage_limit=True, retry_after=30, detail="org_SECRET")
+        yield  # a generator, like the real stream_chat
+
+    monkeypatch.setattr(llm, "stream_chat", limited)
+    response = client.post("/api/chat", json={"question": "Anything?"})
+    assert events(response)[-1] == ("error", {"message": "The AI model has reached its limit.", "usage_limit": True, "retry_after": 30})
+    assert "org_SECRET" not in response.text
 
 
 @pytest.mark.parametrize(

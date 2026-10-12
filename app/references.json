@@ -79,10 +79,6 @@
     "text": "K. Taira et al., “Modal analysis of fluid flows: An overview,” *AIAA Journal*, vol. 55, no. 12, pp. 4013–4041, 2017.",
     "url": "https://doi.org/10.2514/1.J056060"
   },
-  "Hinton2006_Reducing_dimensionality.pdf": {
-    "text": "G. E. Hinton and R. R. Salakhutdinov, “Reducing the dimensionality of data with neural networks,” *Science*, vol. 313, no. 5786, pp. 504–507, 2006.",
-    "url": "https://doi.org/10.1126/science.1127647"
-  },
   "Murata2020_Nonlinear_mode_decomposition_CNN.pdf": {
     "text": "T. Murata, K. Fukami, and K. Fukagata, “Nonlinear mode decomposition with convolutional neural networks for fluid dynamics,” *Journal of Fluid Mechanics*, vol. 882, A13, 2020.",
     "url": "https://doi.org/10.1017/jfm.2019.822"

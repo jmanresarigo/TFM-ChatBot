@@ -194,8 +194,37 @@ def test_rate_limit_is_retried_after_waiting(fake_server, monkeypatch):
 def test_rate_limit_gives_up_beyond_the_wait_budget(fake_server, monkeypatch):
     monkeypatch.setattr(llm, "MAX_RETRY_WAIT", 5)
     fake_server(lambda request: httpx.Response(429, headers={"retry-after": "60"}, json={"error": {"message": "slow down"}}))
-    with pytest.raises(llm.LLMError, match="Rate limit"):
+    with pytest.raises(llm.LLMError, match="usage limit") as error:
         list(llm.stream_chat([], {}, endpoint=ENDPOINT))
+    assert error.value.usage_limit and error.value.retry_after == 60  # from the retry-after header
+
+
+GROQ_DAILY = (
+    "Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01abc` service tier `on_demand` "
+    "on tokens per day (TPD): Limit 500000, Used 499100, Requested 1800. Please try again in 2h31m12s. "
+    "Need more tokens? Upgrade to Dev Tier today."
+)
+
+
+def test_rate_limit_message_names_the_limit_and_the_wait(fake_server, monkeypatch):
+    monkeypatch.setattr(llm, "MAX_RETRY_WAIT", 0)
+    fake_server(lambda request: httpx.Response(429, headers={"retry-after": "9072"}, json={"error": {"message": GROQ_DAILY}}))
+    with pytest.raises(llm.LLMError) as error:
+        list(llm.stream_chat([], {}, endpoint=ENDPOINT))
+    message = str(error.value)
+    assert "tokens per day" in message
+    assert "about 2 h 32 min" in message
+    assert "org_01abc" not in message  # the account ID stays in the server log
+    assert error.value.retry_after == 9072
+    assert error.value.detail == GROQ_DAILY
+
+
+@pytest.mark.parametrize(
+    "text, seconds",
+    [("Please try again in 7.66s.", 7.66), ("try again in 1m26.4s", 86.4), ("try again in 2h31m12s", 9072), ("try again in 560ms", 0.56), ("slow down", None)],
+)
+def test_parse_wait_reads_groq_durations(text, seconds):
+    assert llm.parse_wait(text) == pytest.approx(seconds) if seconds else llm.parse_wait(text) is None
 
 
 def test_rejected_key_gives_a_clear_error(fake_server):

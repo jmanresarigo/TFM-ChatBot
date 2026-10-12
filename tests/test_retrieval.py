@@ -26,6 +26,15 @@ def test_hybrid_search_rewards_chunks_found_by_both_searches(monkeypatch):
     assert "keyword_rank" not in results[1]
 
 
+def test_keyword_only_hit_counts_less_than_vector_only_hit(monkeypatch):
+    # Same rank in each list: the vector hit wins, the keyword hit gets KEYWORD_WEIGHT as much
+    monkeypatch.setattr(retrieval, "vector_search", lambda conn, q, n: hits("v"))
+    monkeypatch.setattr(retrieval, "keyword_search", lambda conn, q, n: hits("k"))
+    results = retrieval.hybrid_search(None, "q", top_k=2)
+    assert [r["id"] for r in results] == ["v", "k"]
+    assert results[1]["score"] == pytest.approx(retrieval.KEYWORD_WEIGHT * results[0]["score"])
+
+
 def test_hybrid_search_works_when_one_search_finds_nothing(monkeypatch):
     monkeypatch.setattr(retrieval, "vector_search", lambda conn, q, n: hits("a", "b"))
     monkeypatch.setattr(retrieval, "keyword_search", lambda conn, q, n: [])
@@ -77,6 +86,22 @@ def test_embed_query_retries_once_on_rate_limit(fake_embeddings_api, monkeypatch
     fake_embeddings_api(handler)
     assert np.allclose(retrieval.embed_query("q"), [1.0, 0.0])
     assert len(calls) == 2
+
+
+def test_embed_query_usage_limit_says_how_long_to_wait(fake_embeddings_api, monkeypatch):
+    monkeypatch.setattr(retrieval.time, "sleep", lambda s: None)
+    fake_embeddings_api(lambda request: httpx.Response(429, headers={"retry-after": "90"}, json={"errors": ["limit"]}))
+    with pytest.raises(retrieval.RetrievalError, match="about 90 seconds") as error:
+        retrieval.embed_query("q")
+    assert error.value.usage_limit and error.value.retry_after == 90
+
+
+def test_embed_query_usage_limit_without_a_wait_mentions_the_daily_reset(fake_embeddings_api, monkeypatch):
+    monkeypatch.setattr(retrieval.time, "sleep", lambda s: None)
+    fake_embeddings_api(lambda request: httpx.Response(429, json={"errors": ["limit"]}))
+    with pytest.raises(retrieval.RetrievalError, match="00:00 UTC") as error:
+        retrieval.embed_query("q")
+    assert error.value.usage_limit and error.value.retry_after is None
 
 
 def test_embed_query_rejected_key(fake_embeddings_api):

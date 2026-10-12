@@ -146,6 +146,12 @@ def sse(event: str, data) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def error_event(e: llm.LLMError | retrieval.RetrievalError) -> str:
+    """An "error" event with the user-facing message and, for usage limits,
+    the seconds to wait (the page shows a countdown)."""
+    return sse("error", {"message": str(e), "usage_limit": e.usage_limit, "retry_after": e.retry_after})
+
+
 def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
     """The RAG round trip as a sequence of events:
 
@@ -156,14 +162,16 @@ def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
               when no search was needed)
     token     a piece of the answer, as soon as the model writes it
     done      citations, refusal flag, context window usage and timings
-    error     something failed; the message says what (the server keeps running)
+    error     something failed: {"message": what to tell the user, "usage_limit":
+              true when an API's free-tier limit was reached, "retry_after":
+              seconds to wait then, or null} (the server keeps running)
     """
     start = time.perf_counter()
     try:
         route = llm.route_question(question, history)
     except llm.LLMError as e:
-        log.error("Routing failed: %s", e)
-        yield sse("error", {"message": str(e)})
+        log.error("Routing failed: %s %s", e, e.detail)
+        yield error_event(e)
         return
     if history:
         yield sse("route", route)
@@ -174,7 +182,10 @@ def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
             chunks = retrieval.search(route["query"], top_k=llm.TOP_K)
         except (retrieval.RetrievalError, psycopg.OperationalError) as e:
             log.error("Retrieval failed: %s", e)
-            yield sse("error", {"message": f"Search failed: {e}"})
+            if getattr(e, "usage_limit", False):
+                yield error_event(e)
+            else:
+                yield sse("error", {"message": f"Search failed: {e}", "usage_limit": False, "retry_after": None})
             return
 
     yield sse("excerpts", [
@@ -192,8 +203,8 @@ def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
             pieces.append(piece)
             yield sse("token", {"text": piece})
     except llm.LLMError as e:
-        log.error("Generation failed: %s", e)
-        yield sse("error", {"message": str(e)})
+        log.error("Generation failed: %s %s", e, e.detail)
+        yield error_event(e)
         return
 
     answer = "".join(pieces).strip()

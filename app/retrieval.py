@@ -13,6 +13,9 @@ Hybrid search runs both and merges the two rankings with Reciprocal Rank
 Fusion (RRF): a chunk gets 1 / (RRF_K + rank) points from each list it
 appears in, and chunks are sorted by their total. Ranks are used instead of
 raw scores because the two searches score on completely different scales.
+The keyword list counts KEYWORD_WEIGHT as much as the vector list: it is the
+noisier of the two (its ranking has no notion of how rare a word is), and at
+full weight its matches pushed vector search's best hits out of the top 5.
 
 The question is turned into a vector by an embeddings API (OpenAI-compatible:
 Cloudflare Workers AI by default, or a local Ollama), running the SAME model
@@ -26,6 +29,7 @@ results:
 """
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -54,6 +58,10 @@ QUERY_INSTRUCTION = os.getenv(
 
 CANDIDATES = 20  # how many results each search contributes before fusion
 RRF_K = 60  # standard RRF constant: dampens the gap between rank 1 and 2
+# Tuned on evals/questions.jsonl (57 answerable questions, top 5):
+#   weight 1.0  hit@1 49%  hit@5 89%  MRR 0.65   (vector only: 54%, 89%, 0.68)
+#   weight 0.5  hit@1 56%  hit@5 91%  MRR 0.70   (stable from 0.3 to 0.7)
+KEYWORD_WEIGHT = 0.5
 
 _client = httpx.Client(timeout=httpx.Timeout(10, read=30))
 
@@ -62,7 +70,29 @@ class RetrievalError(Exception):
     """A problem the user can fix (missing config, empty database, API down...).
 
     Raised instead of SystemExit so a web server can turn it into an error
-    response instead of shutting down. The command line converts it below."""
+    response instead of shutting down. The command line converts it below.
+    `usage_limit` marks the embeddings API's free-tier limit being reached,
+    and `retry_after` is how many seconds to wait then (None if unknown)."""
+
+    def __init__(self, message: str, usage_limit: bool = False, retry_after: float | None = None):
+        super().__init__(message)
+        self.usage_limit = usage_limit
+        self.retry_after = retry_after
+
+
+def describe_wait(seconds: float) -> str:
+    """A wait in words, rounded up: "about 75 seconds", "about 3 minutes".
+    Also used by llm.py for the LLM's usage limits."""
+    seconds = math.ceil(seconds)
+    if seconds <= 1:
+        return "about 1 second"
+    if seconds < 120:  # seconds while minutes would be too coarse
+        return f"about {seconds} seconds"
+    if seconds < 3600:
+        minutes = math.ceil(seconds / 60)
+        return f"about {minutes} minute{'s' if minutes > 1 else ''}"
+    hours, minutes = divmod(math.ceil(seconds / 60), 60)
+    return f"about {hours} h {minutes:02d} min"
 
 
 def embed_query(question: str) -> np.ndarray:
@@ -87,6 +117,17 @@ def embed_query(question: str) -> np.ndarray:
         break
     if response.status_code == 401 or response.status_code == 403:
         raise RetrievalError("The embeddings API rejected the key. Check EMBEDDING_API_KEY in .env.")
+    if response.status_code == 429:
+        # Cloudflare's free allowance is per day (resets 00:00 UTC), with short
+        # per-minute limits on top; the header says which, when it is sent.
+        try:
+            wait = float(response.headers["retry-after"])
+        except (KeyError, ValueError):
+            wait = None
+        when = f"wait {describe_wait(wait)} and ask again" if wait else (
+            "try again in a few minutes; if the daily allowance is used up, it resets at 00:00 UTC"
+        )
+        raise RetrievalError(f"The document search service (free tier) has reached its usage limit. Please {when}.", usage_limit=True, retry_after=wait)
     if response.status_code != 200:
         raise RetrievalError(f"Embeddings API returned {response.status_code}: {response.text[:300]}")
     vector = np.asarray(response.json()["data"][0]["embedding"], dtype=np.float32)
@@ -158,15 +199,15 @@ def keyword_search(conn: psycopg.Connection, question: str, limit: int) -> list[
 def hybrid_search(
     conn: psycopg.Connection, question: str, top_k: int = 5
 ) -> list[dict]:
-    """Merge vector and keyword results with Reciprocal Rank Fusion."""
+    """Merge vector and keyword results with weighted Reciprocal Rank Fusion."""
     vector_hits = vector_search(conn, question, CANDIDATES)
     keyword_hits = keyword_search(conn, question, CANDIDATES)
 
     fused: dict[str, dict] = {}
-    for method, hits in (("vector", vector_hits), ("keyword", keyword_hits)):
+    for method, hits, weight in (("vector", vector_hits, 1.0), ("keyword", keyword_hits, KEYWORD_WEIGHT)):
         for rank, chunk in enumerate(hits, start=1):
             entry = fused.setdefault(chunk["id"], {**chunk, "score": 0.0})
-            entry["score"] += 1 / (RRF_K + rank)
+            entry["score"] += weight / (RRF_K + rank)
             entry[f"{method}_rank"] = rank  # kept to show where it came from
 
     ranked = sorted(fused.values(), key=lambda c: c["score"], reverse=True)
