@@ -35,7 +35,15 @@ REPEATED_LINE_FRACTION = 0.3
 # fraction of its lines contain dot leaders (". . . .").
 TOC_LINE_FRACTION = 0.3
 # Headings that start the references section, and headings that end it.
-REFERENCES_HEADING = re.compile(r"^(references|bibliography)$", re.IGNORECASE)
+# IEEE journals letter-space the heading ("R E F E R E N C E S"); Annual
+# Reviews calls it "Literature cited".
+REFERENCES_HEADING = re.compile(
+    r"^(" + r"\s?".join("references") + r"|bibliography|literature cited)$", re.IGNORECASE
+)
+# Some journals (e.g. Physical Review) print no heading: the list just starts
+# with "[1] A. R. Jones, ...". Only a first entry with initials counts, so a
+# sentence that happens to start with "[1]" doesn't end the document.
+FIRST_REFERENCE = re.compile(r"^\[1\]\s+(?:[A-Z]\.\s?)+(?:-?[A-Z]\.\s?)*[A-Z][a-z]")
 AFTER_REFERENCES_HEADING = re.compile(
     r"^(appendix|annex)\b|^[A-Z]\.\s+[A-Z][A-Z ]+$", re.IGNORECASE
 )
@@ -218,7 +226,9 @@ def parse_pdf(pdf_path: Path) -> tuple[list[dict], dict]:
             for line in block:
                 line = fix_characters(line)
                 stripped = line.strip()
-                if REFERENCES_HEADING.match(stripped):
+                if REFERENCES_HEADING.match(stripped) or (
+                    not in_references and FIRST_REFERENCE.match(stripped)
+                ):
                     in_references = True
                     stats["references_removed_from_page"] = page["label"]
                 elif in_references and AFTER_REFERENCES_HEADING.match(stripped):

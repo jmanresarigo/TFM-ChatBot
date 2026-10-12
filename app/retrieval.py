@@ -100,7 +100,9 @@ def connect() -> psycopg.Connection:
     url = os.getenv("DATABASE_URL")
     if not url:
         raise RetrievalError("DATABASE_URL is not set. Add it to your .env file.")
-    conn = psycopg.connect(url)
+    # Fail fast when the database is unreachable, so the chat page shows an
+    # error instead of waiting on "Searching the documents…" indefinitely.
+    conn = psycopg.connect(url, connect_timeout=5)
     register_vector(conn)
     return conn
 

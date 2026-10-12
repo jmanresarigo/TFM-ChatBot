@@ -2,6 +2,7 @@
 
 Endpoints:
     GET  /           the chat page (app/static/index.html)
+    GET  /static/... the page's scripts, styles and fonts (Markdown and math rendering)
     POST /api/chat   {"question": "...", "history": [...]} -> the answer as a
                      stream of Server-Sent Events (SSE), see answer_stream()
     GET  /health     is the server able to work? (database, embeddings API, LLM API)
@@ -40,6 +41,7 @@ from fastapi.responses import (
     PlainTextResponse,
     StreamingResponse,
 )
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import llm
@@ -47,6 +49,19 @@ import retrieval
 
 STATIC_DIR = Path(__file__).parent / "static"
 log = logging.getLogger("uvicorn.error")  # shows up in the server's console
+
+# The IEEE reference of each document, by PDF file name, so the page can cite
+# "[1] K. Fukami and K. Taira, ..." instead of a file name.
+REFERENCES = {
+    source: entry
+    for source, entry in json.loads((Path(__file__).parent / "references.json").read_text(encoding="utf-8")).items()
+    if not source.startswith("_")
+}
+
+
+def reference(source: str) -> dict:
+    """The reference shown for a document; just its file name if it has none."""
+    return REFERENCES.get(source, {"text": source})
 
 # Empty = no password (local development). Set it on any public deployment.
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
@@ -111,6 +126,7 @@ class PasswordMiddleware:
 
 app = FastAPI(title="TFM Chatbot", lifespan=lifespan)
 app.add_middleware(PasswordMiddleware)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 class Message(BaseModel):
@@ -135,8 +151,9 @@ def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
 
     route     {"search": bool, "query": str}: whether the documents are searched
               and with what query (sent only when there is history to route on)
-    excerpts  the 5 retrieved chunks (sent before the model starts writing;
-              an empty list when no search was needed)
+    excerpts  the 5 retrieved chunks: number, document, pages and its IEEE
+              reference (sent before the model starts writing; an empty list
+              when no search was needed)
     token     a piece of the answer, as soon as the model writes it
     done      citations, refusal flag, context window usage and timings
     error     something failed; the message says what (the server keeps running)
@@ -161,7 +178,7 @@ def answer_stream(question: str, history: list[dict]) -> Iterator[str]:
             return
 
     yield sse("excerpts", [
-        {"n": i, "source": c["source"], "pages": c["pages"], "preview": c["content"][:400]}
+        {"n": i, "source": c["source"], "pages": c["pages"], "reference": reference(c["source"])}
         for i, c in enumerate(chunks, start=1)
     ])
 

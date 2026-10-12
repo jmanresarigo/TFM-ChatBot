@@ -22,7 +22,7 @@ Built as a learning project for the full lifecycle of an AI application: ingesti
  │        │ private network                      │         embeds the QUESTION
  │        ▼ db.railway.internal:5432             │         (Qwen3-Embedding-0.6B)
  │ db    Postgres 17 + pgvector, on a volume     │
- │        978 chunks: text + 1024-dim vectors    │ ─────►  Groq
+ │        2285 chunks: text + 1024-dim vectors   │ ─────►  Groq
  └───────────────────────────────────────────────┘         writes the ANSWER
                                                             (Qwen 3.8 27B)
  MY PC (never deployed)
@@ -49,7 +49,7 @@ The server keeps no conversation state: the browser holds the history and sends 
 | Embeddings | Qwen3-Embedding-0.6B: locally (sentence-transformers, GPU) for ingestion; Cloudflare Workers AI for questions |
 | Vector database | PostgreSQL 17 + pgvector (HNSW index), full-text search (GIN) |
 | LLM | Groq, OpenAI-compatible API, `qwen/qwen3.8-27b` (any OpenAI-compatible provider works, including a local Ollama) |
-| Web | FastAPI, uvicorn, vanilla HTML/CSS/JS, Server-Sent Events |
+| Web | FastAPI, uvicorn, vanilla HTML/CSS/JS, Server-Sent Events; answers rendered as Markdown + math (marked, KaTeX, sanitized by DOMPurify, vendored in `app/static/vendor/`) |
 | Containers | Docker (slim image, no ML libraries, ~140 MB compressed), Docker Compose locally |
 | CI | GitHub Actions: ruff, pytest, Docker build + start-up test |
 | Hosting | Railway: app + database, deployed from `main` after CI passes |
@@ -61,7 +61,9 @@ app/
   main.py            web server: chat API (SSE), health checks, password protection
   llm.py             prompts, routing, history trimming, OpenAI-compatible LLM client
   retrieval.py       question embedding (API), vector + keyword search, RRF fusion
+  references.json    IEEE reference of each document, shown under answers
   static/index.html  chat page
+  static/vendor/     Markdown, math and sanitizer libraries (MIT / Apache-2.0)
 ingestion/
   parse.py           PDF -> clean page text            (data/parsed/)
   chunk.py           pages -> overlapping chunks       (data/chunks/)
