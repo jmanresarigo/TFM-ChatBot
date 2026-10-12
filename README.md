@@ -1,7 +1,3 @@
-
-
-https://github.com/user-attachments/assets/8890bf1f-6019-4eac-9f18-5e5469d2dd46
-
 # TFM Chatbot
 
 [![CI](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml)
@@ -25,8 +21,15 @@ The live demo is private: access is available on request.
 > [!NOTE]
 > The documents themselves are **not** part of this repository: the thesis is unpublished and the cited papers are copyrighted. The code, prompts and tests are here; to run the app you supply your own PDFs (see [Adding documents](#adding-documents)).
 
+## Demo video
+
+A longer walkthrough than the GIF above. Click to play.
+
+https://github.com/user-attachments/assets/8890bf1f-6019-4eac-9f18-5e5469d2dd46
+
 ## Table of contents
 
+- [Demo video](#demo-video)
 - [Features](#features)
 - [How it works](#how-it-works)
 - [Tech stack](#tech-stack)
