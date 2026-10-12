@@ -63,22 +63,24 @@ https://github.com/user-attachments/assets/8890bf1f-6019-4eac-9f18-5e5469d2dd46
 ## How it works
 
 ```mermaid
-flowchart LR
-    U([Browser]) -- "question + history (HTTPS)" --> A
+flowchart TB
+    U(["Browser"])
+    A["app · FastAPI + chat page<br/><sub>Railway, EU</sub>"]
+    E["Embeddings API<br/><sub>Qwen3-Embedding-0.6B</sub>"]
+    D[("db · PostgreSQL + pgvector<br/><sub>Railway, private network</sub>")]
+    L["LLM API<br/><sub>Qwen via Groq</sub>"]
 
-    subgraph Cloud["Cloud host (EU)"]
-        A["app<br/>FastAPI + chat page"] -- "private network" --> D[("db<br/>PostgreSQL + pgvector<br/>chunks: text + vectors")]
+    U <-->|"question ⇄ streamed answer"| A
+    A -->|"① embed the question"| E
+    A -->|"② hybrid search"| D
+    A -->|"③ generate the answer"| L
+
+    subgraph PC["Local machine · never deployed"]
+        direction LR
+        I["PDFs → parse → chunk → embed (GPU)"]
+        EV["evaluations · local LLM judge"]
     end
-
-    A -- "question" --> E["Embeddings API<br/>Qwen3-Embedding-0.6B"]
-    A -- "excerpts + question" --> L["LLM API<br/>OpenAI-compatible"]
-    A -. "answer stream (SSE)" .-> U
-
-    subgraph PC["Local machine (never deployed)"]
-        P[PDFs] --> I["parse → chunk → embed (GPU) → store"]
-        EV["evaluations<br/>local LLM judge"]
-    end
-    I --> D
+    D -.-|"chunks uploaded from here ↑"| I
 ```
 
 **Answering a question**
