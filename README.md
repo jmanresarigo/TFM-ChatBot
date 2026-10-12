@@ -42,6 +42,7 @@ The project was built to learn the full lifecycle of an AI application: document
 - **Context meter.** Shows how much of the model's context window the conversation uses; the oldest messages are dropped when it is full.
 - **Evaluation suite.** Retrieval metrics (hit@k, MRR) and answer quality scored by a local LLM judge.
 - **Clear limit messages.** When a free-tier API limit is reached, the chat says which limit and shows a countdown until the user can ask again.
+- **Light and dark themes.** Follows the system setting until the visitor picks one with the toggle, which switches with an animated circular reveal.
 - **Stateless server.** The browser keeps the conversation; any server instance can answer any request.
 
 ## How it works
