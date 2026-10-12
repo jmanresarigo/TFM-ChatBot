@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/8890bf1f-6019-4eac-9f18-5e5469d2dd46
+
 # TFM Chatbot
 
 [![CI](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml/badge.svg)](https://github.com/jmanresarigo/TFM-ChatBot/actions/workflows/ci.yml)
