@@ -8,7 +8,15 @@
 
 A retrieval-augmented generation (RAG) chat assistant that answers questions about a Master's thesis, *Spiking Neural Networks for Lift Coefficient Reconstruction in Extreme Vortex-Gust Airfoil Interactions*, and the literature it cites. Every answer is grounded in the documents and cites them in IEEE style, down to the page.
 
+<p align="center">
+  <img src="media/demo.gif" alt="Demo: a question is answered with citations, the IEEE references open, the theme switches to dark, and a question outside the documents is declined" width="900">
+</p>
+
+<p align="center"><sub>A question answered from the documents with citations · the IEEE reference list · light/dark theme · declining a question the documents can't answer</sub></p>
+
 The project was built to learn the full lifecycle of an AI application: document ingestion, hybrid retrieval, evaluation, LLM integration, a streaming web app, containers, continuous integration and cloud deployment.
+
+The live demo is private: access is available on request.
 
 > [!NOTE]
 > The documents themselves are **not** part of this repository: the thesis is unpublished and the cited papers are copyrighted. The code, prompts and tests are here; to run the app you supply your own PDFs (see [Adding documents](#adding-documents)).
@@ -118,6 +126,7 @@ evals/
 └── results/                 score summaries only (no document text)
 prompts/                     versioned system, routing and judge prompts
 tests/                       unit tests (made-up text and fakes; no real services)
+media/                       demo GIF for this README
 data/                        NOT committed: PDFs and generated files (parsed/, chunks/, embeddings/)
 Dockerfile                   production image
 docker-compose.yml           local Postgres + app
