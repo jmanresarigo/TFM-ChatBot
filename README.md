@@ -342,7 +342,7 @@ Deploy code changes (for example new entries in `references.json`) before loadin
 
 ## License
 
-No license has been granted: all rights reserved. The thesis and the cited documents are not distributed with this repository. The vendored front-end libraries keep their own licenses: marked (MIT), KaTeX (MIT) and DOMPurify (Apache-2.0 / MPL-2.0).
+No license has been granted: all rights reserved. The thesis and the cited documents are not distributed with this repository. The vendored front-end libraries keep their own licenses, included next to them in `app/static/vendor/`: marked (MIT), KaTeX (MIT) and DOMPurify (Apache-2.0 / MPL-2.0).
 
 ## Author
 
